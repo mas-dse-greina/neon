@@ -37,10 +37,9 @@ import glob, os
 # [SimpleItk](http://www.simpleitk.org/) is an open-source library for reading and processing 3D models. It was particularly designed for medical imaging and was built on top of the Insight and Segmentation and Registration ([ITK](https://itk.org/)) toolkit sponsored by the National Library of Medicine.
 # 
 # What's nice about SimpleITK is that it has pre-built methods to read all of the DICOM slices into a 3D object and perform segmentation and morphological operations on that 3D object. I believe it automatically arranges the slices in the correct order. It also can handle compressed DICOM files.
-
-#!pip install SimpleITK
 import SimpleITK as sitk
 
+#######################
 
 # Parse the command line
 
@@ -48,14 +47,24 @@ from neon.util.argparser import NeonArgparser
 
 parser = NeonArgparser(__doc__)
 
+# We can pass the input directory and output file name from the command line
 parser.add_argument('-out', '--outFilename', default='dicom_out.h5', help='Name of the output HDF5 file')
-
+parser.set_defaults(data_dir='/Volumes/data/tonyr/dicom/Lung CT/stage1')
+parser.set_defaults(save_path='.')
 args = parser.parse_args()
 
-outFilename = args.outFilename
 
-if len(args.data_dir) == 0:
-    data_dir = "/Volumes/data/tonyr/dicom/Lung CT/stage1"
+data_dir = args.data_dir
+outFilename = args.save_path + '/' + args.outFilename
+
+##############################
+
+def verbosePrint(txt):
+
+        print(txt)
+
+verbosePrint('DICOM to HDF5 converter started ... ')
+
 
 patients = glob.glob(os.path.join(data_dir, '*')) # Get the folder names for the patients
 
@@ -65,8 +74,7 @@ if numPatients == 0:
     raise IOError('Directory ' + data_dir + ' not found or no files found in directory')
     
 
-
-print('Found the following subfolders with DICOMs: {}'.format(patients))
+verbosePrint('Found the following subfolders with DICOMs: {}'.format(patients))
 
 
 # ## Now load the entire set of DICOM images into one large HDF5 file
@@ -131,7 +139,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
         patientID = ntpath.basename(patientDirectory) # Unique ID for patient
 
-        print('({} of {}): Processing patient: {}'.format(1, numPatients, patientID))
+        verbosePrint('({} of {}): Processing patient: {}'.format(1, numPatients, patientID))
 
         imgTensor, original_C, original_H, original_W, original_D = getImageTensor(patientDirectory)
         
@@ -161,5 +169,5 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
     # Output attribute 'lshape' to let neon know the shape of the tensor.
     df['input'].attrs['lshape'] = (C, H, W, D) # (Channel, Height, Width, Depth)
 
-    print('FINISHED. Output to HDF5 file: {}'.format(outFilename))
+    verbosePrint('FINISHED. Output to HDF5 file: {}'.format(outFilename))
 
