@@ -57,7 +57,7 @@ label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
               label=label_config,
-              manifest_filename='manifest_subset0.txt', subset_fraction=0.1,
+              manifest_filename='manifest_subset0.txt', 
               minibatch_size=128)
 train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
