@@ -21,9 +21,9 @@ Just tests that aeon dataloader works and can be fed to simple model in neon.
 
 from neon import logger as neon_logger
 from neon.initializers import Gaussian
-from neon.optimizers import GradientDescentMomentum, Schedule, Adam
+from neon.optimizers import Adam
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, Affine
-from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification, Logistic
+from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification, PrecisionRecall
 from neon.models import Model
 from aeon import DataLoader
 from neon.callbacks.callbacks import Callbacks
@@ -57,7 +57,7 @@ label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
               label=label_config,
-              manifest_filename='manifest_subset0.txt',
+              manifest_filename='manifest_subset0.txt', subset_fraction=0.1,
               minibatch_size=128)
 train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
@@ -110,7 +110,8 @@ if args.model_file:
     mlp.load_params(args.model_file)
 
 # configure callbacks
-callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
+#callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(lunaModel, eval_set=valid_set, metric=PrecisionRecall(num_classes=2), **args.callback_args)
 
 if args.deconv:
     callbacks.add_deconv_callback(train_set, valid_set)
@@ -118,5 +119,8 @@ if args.deconv:
 lunaModel.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs,
         cost=cost, callbacks=callbacks)
 
+neon_logger.display('Finished training. Calculating error on the validation set...')
 neon_logger.display('Misclassification error = %.1f%%' %
                     (lunaModel.eval(valid_set, metric=Misclassification()) * 100))
+
+neon_logger.display('Precision/recall = {}'.format(lunaModel.eval(valid_set, metric=PrecisionRecall(num_classes=2))))
