@@ -97,6 +97,8 @@ layers = [Dropout(keep=.8),
           Conv((1, 1, 192), **conv),
           Conv((1, 1, 16), **conv),
           Affine(nout=512, init=init_uni, activation=relu),
+          Affine(nout=128, init=init_uni, activation=relu),
+          Affine(nout=64, init=init_uni, activation=relu),
           Affine(nout=2, init=init_uni, activation=Softmax())]
 
 
@@ -107,7 +109,7 @@ lunaModel = Model(layers=layers)
 if args.model_file:
     import os
     assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    mlp.load_params(args.model_file)
+    lunaModel.load_params(args.model_file)
 
 # configure callbacks
 #callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
@@ -118,6 +120,8 @@ if args.deconv:
 
 lunaModel.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs,
         cost=cost, callbacks=callbacks)
+
+model.save_params('LUNA16_simpleCNN_model.prm')
 
 neon_logger.display('Finished training. Calculating error on the validation set...')
 neon_logger.display('Misclassification error = %.1f%%' %
