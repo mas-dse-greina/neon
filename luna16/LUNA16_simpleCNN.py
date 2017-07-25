@@ -44,6 +44,9 @@ args = parser.parse_args()
 # hyperparameters
 num_epochs = args.epochs
 
+if (args.deterministic is None):
+  args.deterministic = None
+
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 be.enable_winograd = 4  # default to winograd 4 for fast autotune
@@ -57,7 +60,8 @@ label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
               label=label_config,
-              manifest_filename='manifest_allbut0.txt', 
+              manifest_filename='manifest_allbut0.csv', 
+              subset_fraction=0.01,
               minibatch_size=128)
 train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
@@ -121,10 +125,9 @@ if args.deconv:
 lunaModel.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs,
         cost=cost, callbacks=callbacks)
 
-model.save_params('LUNA16_simpleCNN_model.prm')
+lunamodel.save_params('LUNA16_simpleCNN_model.prm')
 
 neon_logger.display('Finished training. Calculating error on the validation set...')
-neon_logger.display('Misclassification error = %.1f%%' %
-                    (lunaModel.eval(valid_set, metric=Misclassification()) * 100))
+neon_logger.display('Misclassification error = {:.1f}'.format(lunaModel.eval(valid_set, metric=Misclassification()) * 100))
 
 neon_logger.display('Precision/recall = {}'.format(lunaModel.eval(valid_set, metric=PrecisionRecall(num_classes=2))))
