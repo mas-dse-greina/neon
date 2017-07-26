@@ -167,25 +167,17 @@ def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
         subjectName = ntpath.splitext(ntpath.basename(img_file))[0]
         
 
-        # Try to balance the number of negative and number of positive patches
-        maxNegatives = (len(np.where(valuesArray==1)[0]) + 1)*2 # Number of negatives as function of number of positives
-        numNegatives = 0
-        
         print('Saving image patches for file {}/{}.'.format(SUBSET, subjectName))
         for i in range(len(valuesArray)):
 
-            if (valuesArray[i] == 0):
-                numNegatives += 1
+            
+            #print('\r{} of {}'.format(i+1, len(valuesArray))),
+            im = toimage(patchesArray[i])
 
-            if (valuesArray[i] == 1) | (numNegatives <= maxNegatives):
+            pngName = saveDir + '/{}_{}_{}.png'.format(subjectName, i, valuesArray[i])
+            im.save(pngName)
 
-                #print('\r{} of {}'.format(i+1, len(valuesArray))),
-                im = toimage(patchesArray[i])
-
-                pngName = saveDir + '/{}_{}_{}.png'.format(subjectName, i, valuesArray[i])
-                im.save(pngName)
-
-                f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
+            f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
 
         f.close()
 
@@ -197,7 +189,7 @@ Loop through all .mhd files within the data directory and process them.
 """
 
 # Reset the manifest file to empty
-manifestFilename = 'manifest_{}.csv'.format(SUBSET)
+manifestFilename = 'manifest_{}_ALL.csv'.format(SUBSET)
 f = open(manifestFilename, 'w')
 f.close()
 

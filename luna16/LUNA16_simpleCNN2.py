@@ -31,7 +31,7 @@ from neon import logger as neon_logger
 from neon.initializers import Gaussian, GlorotUniform
 from neon.optimizers import Adam, Adadelta
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, Affine
-from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification, PrecisionRecall
+from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, CrossEntropyBinary, Misclassification, PrecisionRecall
 from neon.models import Model
 from aeon import DataLoader
 from neon.callbacks.callbacks import Callbacks
@@ -52,9 +52,11 @@ args = parser.parse_args()
 # hyperparameters
 num_epochs = args.epochs
 
-if (args.deterministic is None):
-  args.deterministic = None
+# Next line gets rid of the deterministic warning
+args.deterministic = None
 
+if (args.rng_seed is None):
+  args.rng_seed = 16
 
 print('Batch size = {}'.format(args.batch_size))
 
@@ -65,7 +67,8 @@ be.enable_winograd = 4  # default to winograd 4 for fast autotune
 # Set up the training set to load via aeon
 # Augmentating the data via flipping, rotating, changing contrast/brightness
 image_config = dict(height=64, width=64, flip_enable=True, channels=1,
-                    contrast=(0.5,1.0), brightness=(0.5,1.0))
+                    contrast=(0.5,1.0), brightness=(0.5,1.0), 
+                    scale=(0.7,1), fixed_aspect_ratio=True)
 label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
@@ -76,7 +79,7 @@ train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
 train_set = OneHot(train_set, index=1, nclasses=2)
 
-# Set up the test set to load via aeon
+# Set up the validation set to load via aeon
 image_config = dict(height=64, width=64, channels=1)
 label_config = dict(binary=False)
 config = dict(type="image,label",
@@ -87,6 +90,19 @@ config = dict(type="image,label",
 valid_set = DataLoader(config, be)
 valid_set = TypeCast(valid_set, index=0, dtype=np.float32)  # cast image to float
 valid_set = OneHot(valid_set, index=1, nclasses=2)
+
+# Set up the testset to load via aeon
+image_config = dict(height=64, width=64, channels=1)
+label_config = dict(binary=False)
+config = dict(type="image,label",
+              image=image_config,
+              label=label_config,
+              manifest_filename='manifest_subset2.csv',
+              minibatch_size=args.batch_size,
+              subset_fraction=1.0)
+test_set = DataLoader(config, be)
+test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
+test_set = OneHot(test_set, index=1, nclasses=2)
 
 #init_uni = Gaussian(scale=0.05)
 init_uni = GlorotUniform()
@@ -108,7 +124,7 @@ layers = [Conv((5, 5, 24), **convp1),
           Affine(nout=64, init=init_uni, activation=relu),
           Affine(nout=2, init=init_uni, activation=Softmax())]
 
-cost = GeneralizedCost(costfunc=CrossEntropyMulti())
+cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
 lunaModel = Model(layers=layers)
 
@@ -127,9 +143,14 @@ if args.deconv:
 lunaModel.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs,
         cost=cost, callbacks=callbacks)
 
-lunaModel.save_params('LUNA16_simpleCNN_model.prm')
+lunaModel.save_params('LUNA16_simpleCNN2_model.prm')
 
 neon_logger.display('Finished training. Calculating error on the validation set...')
-neon_logger.display('Misclassification error = {:.2f}%'.format(lunaModel.eval(valid_set, metric=Misclassification())[0] * 100))
+neon_logger.display('Misclassification error (validation) = {:.2f}%'.format(lunaModel.eval(valid_set, metric=Misclassification())[0] * 100))
 
-neon_logger.display('Precision/recall = {}'.format(lunaModel.eval(valid_set, metric=PrecisionRecall(num_classes=2))))
+neon_logger.display('Precision/recall (validation) = {}'.format(lunaModel.eval(valid_set, metric=PrecisionRecall(num_classes=2))))
+
+neon_logger.display('Calculating metrics on the test set. This could take a while...')
+neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
+
+neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))

@@ -52,9 +52,11 @@ args = parser.parse_args()
 # hyperparameters
 num_epochs = args.epochs
 
-if (args.deterministic is None):
-  args.deterministic = None
+# Next line gets rid of the deterministic warning
+args.deterministic = None
 
+if (args.rng_seed is None):
+  args.rng_seed = 16
 
 print('Batch size = {}'.format(args.batch_size))
 
