@@ -44,7 +44,7 @@ args = parser.parse_args()
 # The files are 7-zipped. Regular linux unzip won't work to uncompress them. Use 7za instead.
 # 7za e subset5.zip
 
-DATA_DIR = '/mnt/data/tonyr/dicom/LUNA16/'
+DATA_DIR = '/nfs/site/home/ganthony/luna16_data/'
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
@@ -57,11 +57,13 @@ def extractCandidates(img_file):
     # Read the list of candidate ROI
     dfCandidates = pd.read_csv(DATA_DIR+cand_path)
     
+    
     numCandidates = dfCandidates[dfCandidates['seriesuid']==subjectName].shape[0]
-    print('There are {} candidate nodules in this file.'.format(numCandidates))
+    print('Subject {}: There are {} candidate nodules in this file.'.format(subjectName, numCandidates))
     
     numNonNodules = sum(dfCandidates[dfCandidates['seriesuid']==subjectName]['class'] == 0)
     numNodules = sum(dfCandidates[dfCandidates['seriesuid']==subjectName]['class'] == 1)
+    print('{} are true nodules (class 1) and {} are non-nodules (class 0)'.format(numNodules, numNonNodules))
     
     # Read if the candidate ROI is a nodule (1) or non-nodule (0)
     candidateValues = dfCandidates[dfCandidates['seriesuid']==subjectName]['class'].values
@@ -80,8 +82,11 @@ def extractCandidates(img_file):
     candidatesPixels = (np.round(np.absolute(worldCoords - originMatrix) / itkimage.GetSpacing())).astype(int)
     
     # Replace the missing diameters with the 50th percentile diameter 
+    
+    
     candidateDiameter = dfCandidates['diameter_mm'].fillna(dfCandidates['diameter_mm'].quantile(0.5)).values / itkimage.GetSpacing()[1]
-     
+    candidatePosition = np.zeros([2, numCandidates]) 
+        
     candidatePatches = []
     
     imgAll = sitk.GetArrayFromImage(itkimage) # Read the image volume
@@ -95,23 +100,50 @@ def extractCandidates(img_file):
         zpos = int(candidateVoxel[2])
         
         # Need to handle the candidates where the window would extend beyond the image boundaries
-        windowSize = 32
-        x_lower = np.max([0, xpos - windowSize])  # Return 0 if position off image
-        x_upper = np.min([xpos + windowSize, itkimage.GetWidth()]) # Return  maxWidth if position off image
+        windowSize = 64  # Center a 64 pixel by 64 pixel patch around the candidate position
+        x_lower = np.max([0, xpos - windowSize//2])  # Return 0 if position off image
+        x_upper = np.min([xpos + windowSize//2, itkimage.GetWidth()]) # Return  maxWidth if position off image
         
-        y_lower = np.max([0, ypos - windowSize])  # Return 0 if position off image
-        y_upper = np.min([ypos + windowSize, itkimage.GetHeight()]) # Return  maxHeight if position off image
+        y_lower = np.max([0, ypos - windowSize//2])  # Return 0 if position off image
+        y_upper = np.min([ypos + windowSize//2, itkimage.GetHeight()]) # Return  maxHeight if position off image
+        
+        z_lower = np.max([0, zpos - windowSize//2])  # Return 0 if position off image
+        z_upper = np.min([zpos + windowSize//2, itkimage.GetDepth()]) # Return  maxHeight if position off image
          
         # SimpleITK is x,y,z. Numpy is z, y, x.
         imgPatch = imgAll[zpos, y_lower:y_upper, x_lower:x_upper]
         
+        #imgPatch = imgAll[zpos, :, :]
+        
+        #candidatePosition[:, candNum] = [xpos, ypos]
+        
+        candidatePosition[:, candNum] = [windowSize//2, windowSize//2]
+        
         # Normalize to the Hounsfield units
         # TODO: I don't think we should normalize into Housefield units
-        imgPatchNorm = imgPatch #normalizePlanes(imgPatch)
+        imgPatchNorm = normalizePlanes(imgPatch)
         
         candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
 
-    return candidatePatches, candidateValues, candidateDiameter
+    return candidatePatches, candidateValues, candidateDiameter, candidatePosition
+
+"""
+Normalize pixel depth into Hounsfield units (HU)
+
+This tries to get all pixels between -1000 and 400 HU.
+All other HU will be masked.
+Then we normalize pixel values between 0 and 1.
+
+"""
+def normalizePlanes(npzarray):
+     
+    maxHU = 400.
+    minHU = -1000.
+ 
+    npzarray = (npzarray - minHU) / (maxHU - minHU)
+    npzarray[npzarray>1] = 1.
+    npzarray[npzarray<0] = 0.
+    return npzarray
 
 
 from scipy.misc import toimage
@@ -121,7 +153,7 @@ Save the image patches for a given data file
 """
 # We need to save the array as an image.
 # This is the easiest way. Matplotlib seems to like adding a white border that is hard to kill.
-def SavePatches(img_file, patchesArray, valuesArray):
+def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
     
     saveDir = ntpath.dirname(img_file) + '/patches'
 
@@ -130,39 +162,57 @@ def SavePatches(img_file, patchesArray, valuesArray):
     except:
         os.mkdir(saveDir) 
 
-    with open('manifest_{}.txt'.format(SUBSET), 'a') as f:  # Write to the manifest file for aeon loader
+    with open(manifestFilename, 'a') as f:  # Write to the manifest file for aeon loader
 
         subjectName = ntpath.splitext(ntpath.basename(img_file))[0]
+        
 
-        print('Saving image patches for file {}.'.format(subjectName))
+        # Try to balance the number of negative and number of positive patches
+        maxNegatives = (len(np.where(valuesArray==1)[0]) + 1)*2 # Number of negatives as function of number of positives
+        numNegatives = 0
+        
+        print('Saving image patches for file {}/{}.'.format(SUBSET, subjectName))
         for i in range(len(valuesArray)):
 
-            print('\r{} of {}'.format(i+1, len(valuesArray))),
-            im = toimage(patchesArray[i])
+            if (valuesArray[i] == 0):
+                numNegatives += 1
 
-            pngName = saveDir + '/{}_{}_{}.png'.format(subjectName, i, valuesArray[i])
-            im.save(pngName)
+            if (valuesArray[i] == 1) | (numNegatives <= maxNegatives):
 
-            f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
+                #print('\r{} of {}'.format(i+1, len(valuesArray))),
+                im = toimage(patchesArray[i])
+
+                pngName = saveDir + '/{}_{}_{}.png'.format(subjectName, i, valuesArray[i])
+                im.save(pngName)
+
+                f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
 
         f.close()
 
-        print('Finished {}'.format(subjectName))
+        print('{}: Finished {}\n'.format(SUBSET, subjectName))
 
 
 """
 Loop through all .mhd files within the data directory and process them.
 """
-i = 0
+
+# Reset the manifest file to empty
+manifestFilename = 'manifest_{}.csv'.format(SUBSET)
+f = open(manifestFilename, 'w')
+f.close()
 
 for root, dirs, files in os.walk(DATA_DIR+SUBSET):
+    
     for file in files:
+        
         if (file.endswith('.mhd')) & ('__MACOSX' not in root):  # Don't get the Macintosh directory
             
+
             img_file = os.path.join(root, file)
-            patchesArray, valuesArray, noduleDiameter = extractCandidates(img_file)   
+
+            patchesArray, valuesArray, noduleDiameter, nodulePosition = extractCandidates(img_file)   
              
-            SavePatches(img_file, patchesArray, valuesArray)
+            SavePatches(manifestFilename, img_file, patchesArray, valuesArray)
                 
                 
 
