@@ -44,7 +44,7 @@ args = parser.parse_args()
 # The files are 7-zipped. Regular linux unzip won't work to uncompress them. Use 7za instead.
 # 7za e subset5.zip
 
-DATA_DIR = '/nfs/site/home/ganthony/luna16_data/'
+DATA_DIR = '/mnt/data/medical/luna16/'
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
@@ -120,7 +120,6 @@ def extractCandidates(img_file):
         candidatePosition[:, candNum] = [windowSize//2, windowSize//2]
         
         # Normalize to the Hounsfield units
-        # TODO: I don't think we should normalize into Housefield units
         imgPatchNorm = normalizePlanes(imgPatch)
         
         candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
@@ -130,14 +129,14 @@ def extractCandidates(img_file):
 """
 Normalize pixel depth into Hounsfield units (HU)
 
-This tries to get all pixels between -1000 and 400 HU.
+This tries to get all pixels between -1000 and 600 HU.
 All other HU will be masked.
 Then we normalize pixel values between 0 and 1.
 
 """
 def normalizePlanes(npzarray):
      
-    maxHU = 400.
+    maxHU = 600.
     minHU = -1000.
  
     npzarray = (npzarray - minHU) / (maxHU - minHU)
@@ -155,7 +154,7 @@ Save the image patches for a given data file
 # This is the easiest way. Matplotlib seems to like adding a white border that is hard to kill.
 def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
     
-    saveDir = ntpath.dirname(img_file) + '/patches'
+    saveDir = ntpath.dirname(img_file) + '/patches_ALL'
 
     try:
         os.stat(saveDir)

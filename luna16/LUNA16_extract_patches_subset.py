@@ -44,7 +44,7 @@ args = parser.parse_args()
 # The files are 7-zipped. Regular linux unzip won't work to uncompress them. Use 7za instead.
 # 7za e subset5.zip
 
-DATA_DIR = '/nfs/site/home/ganthony/luna16_data/'
+DATA_DIR = '/mnt/data/medical/luna16/'
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
@@ -120,7 +120,6 @@ def extractCandidates(img_file):
         candidatePosition[:, candNum] = [windowSize//2, windowSize//2]
         
         # Normalize to the Hounsfield units
-        # TODO: I don't think we should normalize into Housefield units
         imgPatchNorm = normalizePlanes(imgPatch)
         
         candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
@@ -130,14 +129,14 @@ def extractCandidates(img_file):
 """
 Normalize pixel depth into Hounsfield units (HU)
 
-This tries to get all pixels between -1000 and 400 HU.
+This tries to get all pixels between -1000 and 600 HU.
 All other HU will be masked.
 Then we normalize pixel values between 0 and 1.
 
 """
 def normalizePlanes(npzarray):
      
-    maxHU = 400.
+    maxHU = 600.
     minHU = -1000.
  
     npzarray = (npzarray - minHU) / (maxHU - minHU)
@@ -146,7 +145,7 @@ def normalizePlanes(npzarray):
     return npzarray
 
 
-from scipy.misc import toimage
+from scipy.misc import toimage, imrotate
 
 """
 Save the image patches for a given data file
@@ -155,7 +154,7 @@ Save the image patches for a given data file
 # This is the easiest way. Matplotlib seems to like adding a white border that is hard to kill.
 def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
     
-    saveDir = ntpath.dirname(img_file) + '/patches'
+    saveDir = ntpath.dirname(img_file) + '/patches_augmented'
 
     try:
         os.stat(saveDir)
@@ -168,7 +167,7 @@ def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
         
 
         # Try to balance the number of negative and number of positive patches
-        maxNegatives = (len(np.where(valuesArray==1)[0]) + 1)*2 # Number of negatives as function of number of positives
+        maxNegatives = (len(np.where(valuesArray==1)[0]) + 1)*5 # Number of negatives as function of number of positives
         numNegatives = 0
         
         print('Saving image patches for file {}/{}.'.format(SUBSET, subjectName))
@@ -186,6 +185,17 @@ def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
                 im.save(pngName)
 
                 f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
+
+                if (valuesArray[i] == 1):  # Augment positives by rotation
+
+                    for angle in [90, 180, 270]:
+
+                        pngName = saveDir + '/{}_{}_{}_{}.png'.format(subjectName, i, angle, valuesArray[i])
+                        im = toimage(imrotate(patchesArray[i], angle))  # Rotate the image and save
+                        im.save(pngName)
+
+                        f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
+
 
         f.close()
 
