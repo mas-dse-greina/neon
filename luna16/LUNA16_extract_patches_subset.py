@@ -207,7 +207,7 @@ Loop through all .mhd files within the data directory and process them.
 """
 
 # Reset the manifest file to empty
-manifestFilename = 'manifest_{}.csv'.format(SUBSET)
+manifestFilename = 'manifest_{}_augmented.csv'.format(SUBSET)
 f = open(manifestFilename, 'w')
 f.close()
 

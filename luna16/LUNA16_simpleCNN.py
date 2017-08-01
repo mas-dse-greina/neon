@@ -18,7 +18,7 @@ CNN layers into a simple MLP with softmax output on LUNA16 data.
 Just tests that aeon dataloader works and can be fed to simple model in neon.
 
 Command:
-python LUNA16_simpleCNN.py -z 64 -e 200
+python LUNA16_simpleCNN.py -z 64 -e 200 -b gpu
 
 On subset0 train, subset1 validation, this gives:
 
