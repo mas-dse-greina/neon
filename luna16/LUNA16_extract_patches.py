@@ -30,6 +30,8 @@ import os
 import ntpath
 from neon.util.argparser import NeonArgparser
 
+import logging
+
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 
@@ -37,7 +39,6 @@ parser.add_argument("--subset", default='subset0',
                     help='LUNA16 subset directory to process')
 
 args = parser.parse_args()
-
 
 # To get the original LUNA16 MHD data:
 # wget https://www.dropbox.com/sh/mtip9dx6zt9nb3z/AAAs2wbJxbNM44-uafZyoMVca/subset5.zip
@@ -48,6 +49,9 @@ DATA_DIR = '/mnt/data/medical/luna16/'
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
+logging.basicConfig(filename='all_'+SUBSET+'.log',
+                    level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 def extractCandidates(img_file):
     
@@ -110,6 +114,15 @@ def extractCandidates(img_file):
         z_lower = np.max([0, zpos - windowSize//2])  # Return 0 if position off image
         z_upper = np.min([zpos + windowSize//2, itkimage.GetDepth()]) # Return  maxHeight if position off image
          
+        skipPatch = False
+        if ((xpos - windowSize//2) < 0) | ((xpos + windowSize//2) > itkimage.GetWidth()):
+            logging.info('img file {} off x for candidate {}'.format(img_file, candNum))
+            skipPatch = True
+
+        if ((ypos - windowSize//2) < 0) | ((ypos + windowSize//2) > itkimage.GetHeight()):
+            logging.info('img file {} off y for candidate {}'.format(img_file, candNum))
+            skipPatch = True
+
         # SimpleITK is x,y,z. Numpy is z, y, x.
         imgPatch = imgAll[zpos, y_lower:y_upper, x_lower:x_upper]
         
@@ -122,21 +135,22 @@ def extractCandidates(img_file):
         # Normalize to the Hounsfield units
         imgPatchNorm = normalizePlanes(imgPatch)
         
-        candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
+        if not skipPatch:
+            candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
 
     return candidatePatches, candidateValues, candidateDiameter, candidatePosition
 
 """
 Normalize pixel depth into Hounsfield units (HU)
 
-This tries to get all pixels between -1000 and 600 HU.
+This tries to get all pixels between -1000 and 400 HU.
 All other HU will be masked.
 Then we normalize pixel values between 0 and 1.
 
 """
 def normalizePlanes(npzarray):
      
-    maxHU = 600.
+    maxHU = 400.
     minHU = -1000.
  
     npzarray = (npzarray - minHU) / (maxHU - minHU)

@@ -17,7 +17,7 @@
 VGG16 on LUNA16 data.
 
 Command:
-python LUNA16_VGG.py -z 64 -e 200 -b gpu -i 0
+python LUNA16_VGG_no_batch_Sigmoid.py -z 128 -e 200 -b gpu -i 0
 
 
 
@@ -59,24 +59,25 @@ print('Batch size = {}'.format(args.batch_size))
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
-be.enable_winograd = 4  # default to winograd 4 for fast autotune
+#be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
 # Set up the training set to load via aeon
 # Augmentating the data via flipping, rotating, changing contrast/brightness
 image_config = dict(height=64, width=64, flip_enable=True, channels=1,
-                    contrast=(0.5,1.0), brightness=(0.5,1.0), 
-                    scale=(0.7,1), fixed_aspect_ratio=True)
+                    contrast=(0.9,1.1), brightness=(0.9,1.1), 
+                    scale=(0.75,0.75), fixed_aspect_ratio=True)
 label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
               label=label_config,
               manifest_filename='manifest_all_but_9.csv',
               minibatch_size=args.batch_size,
-              shuffle_every_epoch = True)
+              macrobatch_size=128,
+              cache_directory='cache_dir',
+              shuffle_manifest=True)
+              #shuffle_every_epoch = True)
 train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
-train_set = TypeCast(train_set, index=1, dtype=np.float32)  # cast label to float
-#train_set = OneHot(train_set, index=1, nclasses=2)
 
 # Set up the validation set to load via aeon
 image_config = dict(height=64, width=64, channels=1)
@@ -88,8 +89,7 @@ config = dict(type="image,label",
               minibatch_size=args.batch_size)
 valid_set = DataLoader(config, be)
 valid_set = TypeCast(valid_set, index=0, dtype=np.float32)  # cast image to float
-valid_set = TypeCast(valid_set, index=1, dtype=np.float32)  # cast label to float
-#valid_set = OneHot(valid_set, index=1, nclasses=2)
+
 
 # Set up the testset to load via aeon
 image_config = dict(height=64, width=64, channels=1)
@@ -97,13 +97,12 @@ label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
               label=label_config,
-              manifest_filename='manifest_subset2_augmented.csv',
+              manifest_filename='manifest_subset9_augmented.csv',
               minibatch_size=args.batch_size,
               subset_fraction=1.0)
 test_set = DataLoader(config, be)
 test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
-test_set = TypeCast(test_set, index=1, dtype=np.float32)  # cast label to float
-#test_set = OneHot(test_set, index=1, nclasses=2)
+
 
 #init_uni = Gaussian(scale=0.05)
 init_uni = GlorotUniform()
@@ -173,8 +172,9 @@ if args.model_file:
     lunaModel.load_params(args.model_file)
 
 # configure callbacks
-#callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
-callbacks = Callbacks(lunaModel, eval_set=valid_set, metric=Misclassification(), **args.callback_args)
+callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
+# add a callback that saves the best model state
+callbacks.add_save_best_state_callback("./LUNA16_VGG_model_no_batch_sigmoid8_2.prm")
 
 if args.deconv:
     callbacks.add_deconv_callback(train_set, valid_set)
@@ -182,7 +182,7 @@ if args.deconv:
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs,
         cost=cost, callbacks=callbacks)
 
-lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid.prm')
+lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid8_2.prm')
 
 # neon_logger.display('Finished training. Calculating error on the validation set...')
 # neon_logger.display('Misclassification error (validation) = {:.2f}%'.format(lunaModel.eval(valid_set, metric=Misclassification())[0] * 100))
