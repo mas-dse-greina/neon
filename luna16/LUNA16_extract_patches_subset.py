@@ -51,9 +51,13 @@ DATA_DIR = '/mnt/data/medical/luna16/'
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
-logging.basicConfig(filename='subset_'+SUBSET+'.log',
-                    level=logging.INFO, format="%(levelname)s: %(message)s")
+# Set up logging
 logger = logging.getLogger(__name__)
+hdlr = logging.FileHandler('subset_'+SUBSET+'.log')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr) 
+logger.setLevel(logging.INFO)
 
 def extractCandidates(img_file):
     
@@ -86,17 +90,13 @@ def extractCandidates(img_file):
     # Subtract the real world origin and scale by the real world (mm per pixel)
     # This should give us the X,Y,Z coordinates for the candidates
     candidatesPixels = (np.round(np.absolute(worldCoords - originMatrix) / itkimage.GetSpacing())).astype(int)
-    
-    # Replace the missing diameters with the 50th percentile diameter 
-    
-    
-    candidateDiameter = dfCandidates['diameter_mm'].fillna(dfCandidates['diameter_mm'].quantile(0.5)).values / itkimage.GetSpacing()[1]
-    candidatePosition = np.zeros([2, numCandidates]) 
-        
+     
+         
     candidatePatches = []
     
     imgAll = sitk.GetArrayFromImage(itkimage) # Read the image volume
-    
+    valueArray = []
+
     for candNum in range(numCandidates):
         
         #print('Extracting candidate patch #{}'.format(candNum))
@@ -139,8 +139,9 @@ def extractCandidates(img_file):
         
         if not skipPatch:
             candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
+            valueArray.append(candidateValues[candNum])
 
-    return candidatePatches, candidateValues, candidateDiameter, candidatePosition
+    return candidatePatches, candidateValues
 
 """
 Normalize pixel depth into Hounsfield units (HU)
@@ -185,7 +186,7 @@ def SavePatches(manifestFilename, img_file, patchesArray, valuesArray):
         # Try to balance the number of negative and number of positive patches
         maxNegatives = (len(np.where(valuesArray==1)[0]) + 1)*10 # Number of negatives as function of number of positives
         numNegatives = 0
-        
+
         print('Saving image patches for file {}/{}.'.format(SUBSET, subjectName))
         for i in range(len(valuesArray)):
 
@@ -236,7 +237,7 @@ for root, dirs, files in os.walk(DATA_DIR+SUBSET):
 
             img_file = os.path.join(root, file)
 
-            patchesArray, valuesArray, noduleDiameter, nodulePosition = extractCandidates(img_file)   
+            patchesArray, valuesArray = extractCandidates(img_file)   
              
             SavePatches(manifestFilename, img_file, patchesArray, valuesArray)
                 

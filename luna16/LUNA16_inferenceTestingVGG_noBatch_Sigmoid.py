@@ -34,8 +34,8 @@ import pandas as pd
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-#testFileName = 'manifest_subset9_SMALL.csv'
-testFileName = 'manifest_subset7_LARGER.csv'
+testFileName = 'manifest_subset9_ALL.csv'
+#testFileName = 'manifest_subset7_LARGER.csv'
 #testFileName = 'manifest_subset7_ALL.csv'
 #testFileName = 'manifest_ALL30_same.csv'
 
@@ -66,40 +66,64 @@ test_set = DataLoader(config, be)
 test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
 
 
-lunaModel = Model('LUNA16_VGG_model_no_batch_sigmoid.prm')
+lunaModel = Model('LUNA16_VGG_model_no_batch_sigmoid8_2.prm')
 
-pred, target = lunaModel.get_outputs(test_set, return_targets=True) 
-pred = pred.T
-target = target.T
+def round(arr, threshold=0.5):
+   '''
+       Round to an arbitrary threshold.
+       Above threshold goes to 1. Below goes 0.
+   '''
+   out = np.zeros(np.shape(arr))
+   out[np.where(arr > threshold)[0]] = 1
+
+   out[np.where(arr <= threshold)[0]] = 0
+
+   return out
+
+prob, target = lunaModel.get_outputs(test_set, return_targets=True) 
+prob = prob.T[0]
+target = target.T[0]
 np.set_printoptions(precision=3, suppress=True)
-print(' ')
-print(pred)
-print(' ')
-pred = np.round(pred).astype(int)
+#print(' ')
+#print(prob)
+#print(' ')
+
+pred = round(prob, threshold=0.8).astype(int)
 print(pred),
 print('predictions')
 print(target),
 print('targets')
 
-print('Predict 1 count = {}'.format(len(np.where(pred[0] == 1)[0])))
-print('True 1 count= {}'.format(len(np.where(target[0] == 1)[0])))
+print('Predict 1 count = {}'.format(len(np.where(pred == 1)[0])))
+print('True 1 count= {}'.format(len(np.where(target == 1)[0])))
 
-print('Predict 0 count = {}'.format(len(np.where(pred[0] == 0)[0])))
-print('True 0 count= {}'.format(len(np.where(target[0] == 0)[0])))
+print('Predict 0 count = {}'.format(len(np.where(pred == 0)[0])))
+print('True 0 count= {}'.format(len(np.where(target == 0)[0])))
+
+target_zero_idx = np.where(target == 0)[0]
+target_one_idx = np.where(target == 1)[0]
+
+false_positive = len(np.where(pred[target_zero_idx] == 1)[0])
+false_negative = len(np.where(pred[target_one_idx] == 0)[0])
+
+print('False positive count = {}'.format(false_positive))
+print('False negative count = {}'.format(false_negative))
 
 if (True):
 
-  print('All equal = {}'.format(np.array_equal(pred[0], target[0])))
+  print('All equal = {}'.format(np.array_equal(pred, target)))
+
+  print('False positives probabilities = {}'.format(prob[np.where(pred != target)[0]]))
 
   from sklearn.metrics import classification_report
 
-  print(classification_report(target[0], pred[0], target_names=['Class 0', 'Class 1']))
+  print(classification_report(target, pred, target_names=['Class 0', 'Class 1']))
 
   #neon_logger.display('Calculating metrics on the test set. This could take a while...')
 
-  misclassification = lunaModel.eval(test_set, metric=Misclassification())
-  neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
+  # misclassification = lunaModel.eval(test_set, metric=Misclassification())
+  # neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
 
-  precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
-  neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
+  # precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
+  # neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
 

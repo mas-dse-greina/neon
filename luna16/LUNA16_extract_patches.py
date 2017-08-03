@@ -49,9 +49,13 @@ DATA_DIR = '/mnt/data/medical/luna16/'
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
-logging.basicConfig(filename='all_'+SUBSET+'.log',
-                    level=logging.INFO, format="%(levelname)s: %(message)s")
+# Set up logging
 logger = logging.getLogger(__name__)
+hdlr = logging.FileHandler('all_'+SUBSET+'.log')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr) 
+logger.setLevel(logging.INFO)
 
 def extractCandidates(img_file):
     
@@ -84,17 +88,13 @@ def extractCandidates(img_file):
     # Subtract the real world origin and scale by the real world (mm per pixel)
     # This should give us the X,Y,Z coordinates for the candidates
     candidatesPixels = (np.round(np.absolute(worldCoords - originMatrix) / itkimage.GetSpacing())).astype(int)
-    
-    # Replace the missing diameters with the 50th percentile diameter 
-    
-    
-    candidateDiameter = dfCandidates['diameter_mm'].fillna(dfCandidates['diameter_mm'].quantile(0.5)).values / itkimage.GetSpacing()[1]
-    candidatePosition = np.zeros([2, numCandidates]) 
-        
+       
     candidatePatches = []
     
     imgAll = sitk.GetArrayFromImage(itkimage) # Read the image volume
-    
+
+    valueArray = []
+
     for candNum in range(numCandidates):
         
         #print('Extracting candidate patch #{}'.format(candNum))
@@ -116,29 +116,26 @@ def extractCandidates(img_file):
          
         skipPatch = False
         if ((xpos - windowSize//2) < 0) | ((xpos + windowSize//2) > itkimage.GetWidth()):
-            logging.info('img file {} off x for candidate {}'.format(img_file, candNum))
+            logger.info('img file {} off x for candidate {}, label {}'.format(img_file, candNum, candidateValues[candNum]))
             skipPatch = True
 
         if ((ypos - windowSize//2) < 0) | ((ypos + windowSize//2) > itkimage.GetHeight()):
-            logging.info('img file {} off y for candidate {}'.format(img_file, candNum))
+            logger.info('img file {} off y for candidate {}, label {}'.format(img_file, candNum, candidateValues[candNum]))
             skipPatch = True
 
         # SimpleITK is x,y,z. Numpy is z, y, x.
         imgPatch = imgAll[zpos, y_lower:y_upper, x_lower:x_upper]
         
         #imgPatch = imgAll[zpos, :, :]
-        
-        #candidatePosition[:, candNum] = [xpos, ypos]
-        
-        candidatePosition[:, candNum] = [windowSize//2, windowSize//2]
-        
+          
         # Normalize to the Hounsfield units
         imgPatchNorm = normalizePlanes(imgPatch)
         
         if not skipPatch:
             candidatePatches.append(imgPatchNorm)  # Append the candidate image patches to a python list
+            valueArray.append(candidateValues[candNum])
 
-    return candidatePatches, candidateValues, candidateDiameter, candidatePosition
+    return candidatePatches, valueArray
 
 """
 Normalize pixel depth into Hounsfield units (HU)
@@ -215,7 +212,7 @@ for root, dirs, files in os.walk(DATA_DIR+SUBSET):
 
             img_file = os.path.join(root, file)
 
-            patchesArray, valuesArray, noduleDiameter, nodulePosition = extractCandidates(img_file)   
+            patchesArray, valuesArray = extractCandidates(img_file)   
              
             SavePatches(manifestFilename, img_file, patchesArray, valuesArray)
                 

@@ -37,6 +37,10 @@ from neon.backends import gen_backend
 from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast, OneHot
 import numpy as np
 
+from neon.data.datasets import Dataset
+from neon.util.persist import load_obj
+import os
+
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 parser.add_argument("--learning_rate", default=0.05,
@@ -63,7 +67,7 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # Set up the training set to load via aeon
 # Augmentating the data via flipping, rotating, changing contrast/brightness
-image_config = dict(height=64, width=64, flip_enable=True, channels=1,
+image_config = dict(height=64, width=64, flip_enable=True, channels=3,
                     contrast=(0.9,1.1), brightness=(0.9,1.1), 
                     scale=(0.75,0.75), fixed_aspect_ratio=True)
 label_config = dict(binary=False)
@@ -80,7 +84,7 @@ train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
 
 # Set up the validation set to load via aeon
-image_config = dict(height=64, width=64, channels=1)
+image_config = dict(height=64, width=64, channels=3)
 label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
@@ -92,7 +96,7 @@ valid_set = TypeCast(valid_set, index=0, dtype=np.float32)  # cast image to floa
 
 
 # Set up the testset to load via aeon
-image_config = dict(height=64, width=64, channels=1)
+image_config = dict(height=64, width=64, channels=3)
 label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
@@ -122,7 +126,7 @@ vgg_layers = []
 
 # set up 3x3 conv stacks with different number of filters
 vgg_layers.append(Conv((3, 3, 64), **conv_params))
-vgg_layers.append(Conv((3, 3, 64), **conv_params))
+vgg_layers.append(Conv((3, 3, 64),  **conv_params))
 vgg_layers.append(Pooling(2, strides=2))
 vgg_layers.append(Conv((3, 3, 128), **conv_params))
 vgg_layers.append(Conv((3, 3, 128), **conv_params))
@@ -139,13 +143,13 @@ vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Pooling(2, strides=2))
-vgg_layers.append(Affine(nout=4096, init=GlorotUniform(), bias=Constant(0), activation=relu))
+vgg_layers.append(Affine(nout=4096, init=GlorotUniform(), bias=Constant(0), activation=relu, name='class_layer'))
 vgg_layers.append(Dropout(keep=0.5))
 vgg_layers.append(Affine(nout=4096, init=GlorotUniform(), bias=Constant(0), activation=relu))
 vgg_layers.append(Dropout(keep=0.5))
 
-vgg_layers.append(Affine(nout=1, init=GlorotUniform(), bias=Constant(0), activation=Logistic(),
-                  name="class_layer"))
+vgg_layers.append(Affine(nout=1, init=GlorotUniform(), bias=Constant(0), activation=Logistic(), name='class_layer'))
+
 
 # define different optimizers for the class_layer and the rest of the network
 # we use a momentum coefficient of 0.9 and weight decay of 0.0005.
@@ -161,10 +165,41 @@ opt_bias_class = GradientDescentMomentum(0.02, 0.9)
 opt = MultiOptimizer({'default': opt_vgg, 'Bias': opt_bias,
      'class_layer': opt_class_layer, 'class_layer_bias': opt_bias_class})
 
+
+
 # use cross-entropy cost to train the network
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
 lunaModel = Model(layers=vgg_layers)
+
+
+
+# location and size of the VGG weights file
+url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
+filename = 'VGG_D.p'
+size = 554227541
+
+# edit filepath below if you have the file elsewhere
+_, filepath = Dataset._valid_path_append('data', '', filename)
+if not os.path.exists(filepath):
+    print('Need to fetch VGG pre-trained weights from cloud. Please wait...')
+    Dataset.fetch_dataset(url, filename, filepath, size)
+
+# load the weights param file
+print("Loading VGG weights from {}...".format(filepath))
+trained_vgg = load_obj(filepath)
+print("Done!")
+
+param_layers = [l for l in lunaModel.layers.layers]
+param_dict_list = trained_vgg['model']['config']['layers']
+for layer, params in zip(param_layers, param_dict_list):
+    if(layer.name == 'class_layer'):
+        break
+
+    # To be sure, we print the name of the layer in our model 
+    # and the name in the vgg model.
+    #print(layer.name + ", " + params['config']['name'])
+    layer.load_weights(params, load_states=True)
 
 if args.model_file:
     import os
@@ -173,21 +208,21 @@ if args.model_file:
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:
-    args.callback_args['eval_freq'] = 3
-   
-
+    args.callback_args['eval_freq'] = 1
+    
 # configure callbacks
 callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
 # add a callback that saves the best model state
-callbacks.add_save_best_state_callback("./LUNA16_VGG_model_no_batch_sigmoid8_2.prm")
+callbacks.add_save_best_state_callback('LUNA16_VGG_model_no_batch_sigmoid_pretrained.prm')
 
 if args.deconv:
     callbacks.add_deconv_callback(train_set, valid_set)
 
-lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs,
-        cost=cost, callbacks=callbacks)
 
-lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid8_2.prm')
+
+lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+
+# lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid_pretrained.prm')
 
 # neon_logger.display('Finished training. Calculating error on the validation set...')
 # neon_logger.display('Misclassification error (validation) = {:.2f}%'.format(lunaModel.eval(valid_set, metric=Misclassification())[0] * 100))
