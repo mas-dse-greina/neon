@@ -14,10 +14,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-VGG16 on LUNA16 data.
+VGG19 on LUNA16 data.
 
 Command:
-python LUNA16_VGG_no_batch_Sigmoid.py -z 128 -e 200 -b gpu -i 0
+python LUNA16_resnet.py -z 128 -e 200 -b gpu -i 0
 
 
 
@@ -37,13 +37,19 @@ from neon.backends import gen_backend
 from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast, OneHot
 import numpy as np
 
+from neon.initializers import Kaiming, IdentityInit
+from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Activation, Dropout
+from neon.layers import MergeSum, SkipNode, BatchNorm
+
+from neon.data.datasets import Dataset
+from neon.util.persist import load_obj
+import os
+
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument("--learning_rate", default=0.05,
-                    help="initial learning rate")
-parser.add_argument("--weight_decay", default=0.001, help="weight decay")
-parser.add_argument('--deconv', action='store_true',
-                    help='save visualization data from deconvolution')
+parser.add_argument('--depth', type=int, default=5,
+                    help='depth of each stage (network depth will be 9n+2)')
+
 args = parser.parse_args()
 
 # hyperparameters
@@ -104,96 +110,84 @@ test_set = DataLoader(config, be)
 test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
 
 
-#init_uni = Gaussian(scale=0.05)
-init_uni = GlorotUniform()
-#opt_gdm = Adam(learning_rate=args.learning_rate, beta_1=0.9, beta_2=0.999)
-opt_gdm = Adadelta(decay=0.95, epsilon=1e-6)
 
-relu = Rectlin()
-conv_params = {'strides': 1,
-               'padding': 1,
-               'init': Xavier(local=True),
-               'bias': Constant(0),
-               'activation': relu,
-               'batch_norm': False}
+def conv_params(fsize, nfm, stride=1, relu=True, batch_norm=True):
+    return dict(fshape=(fsize, fsize, nfm), strides=stride, padding=(1 if fsize > 1 else 0),
+                activation=(Rectlin() if relu else None),
+                init=Kaiming(local=True),
+                batch_norm=batch_norm)
 
-# Set up the model layers
-vgg_layers = []
 
-# set up 3x3 conv stacks with different number of filters
-vgg_layers.append(Conv((3, 3, 64), **conv_params))
-vgg_layers.append(Conv((3, 3, 64), **conv_params))
-vgg_layers.append(Pooling(2, strides=2))
-vgg_layers.append(Conv((3, 3, 128), **conv_params))
-vgg_layers.append(Conv((3, 3, 128), **conv_params))
-vgg_layers.append(Pooling(2, strides=2))
-vgg_layers.append(Conv((3, 3, 256), **conv_params))
-vgg_layers.append(Conv((3, 3, 256), **conv_params))
-vgg_layers.append(Conv((3, 3, 256), **conv_params))
-vgg_layers.append(Pooling(2, strides=2))
-vgg_layers.append(Conv((3, 3, 512), **conv_params))
-vgg_layers.append(Conv((3, 3, 512), **conv_params))
-vgg_layers.append(Conv((3, 3, 512), **conv_params))
-vgg_layers.append(Pooling(2, strides=2))
-vgg_layers.append(Conv((3, 3, 512), **conv_params))
-vgg_layers.append(Conv((3, 3, 512), **conv_params))
-vgg_layers.append(Conv((3, 3, 512), **conv_params))
-vgg_layers.append(Pooling(2, strides=2))
-vgg_layers.append(Affine(nout=4096, init=GlorotUniform(), bias=Constant(0), activation=relu))
-vgg_layers.append(Dropout(keep=0.5))
-vgg_layers.append(Affine(nout=4096, init=GlorotUniform(), bias=Constant(0), activation=relu))
-vgg_layers.append(Dropout(keep=0.5))
-vgg_layers.append(Affine(nout=512, init=GlorotUniform(), bias=Constant(0), activation=relu))
-vgg_layers.append(Dropout(keep=0.5))
+def module_s1(nfm, first=False):
+    '''
+    non-strided
+    '''
+    sidepath = Conv(**conv_params(1, nfm * 4, 1, False, False)) if first else SkipNode()
+    mainpath = [] if first else [BatchNorm(), Activation(Rectlin())]
+    mainpath.append(Conv(**conv_params(1, nfm)))
+    mainpath.append(Conv(**conv_params(3, nfm)))
+    mainpath.append(Conv(**conv_params(1, nfm * 4, relu=False, batch_norm=False)))
 
-vgg_layers.append(Affine(nout=1, init=GlorotUniform(), bias=Constant(0), activation=Logistic(),
-                  name="class_layer"))
+    return MergeSum([sidepath, mainpath])
 
-# define different optimizers for the class_layer and the rest of the network
-# we use a momentum coefficient of 0.9 and weight decay of 0.0005.
-opt_vgg = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005)
-opt_class_layer = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005)
 
-# also define optimizers for the bias layers, which have a different learning rate
-# and not weight decay.
-opt_bias = GradientDescentMomentum(0.02, 0.9)
-opt_bias_class = GradientDescentMomentum(0.02, 0.9)
+def module_s2(nfm):
+    '''
+    strided
+    '''
+    module = [BatchNorm(), Activation(Rectlin())]
+    mainpath = [Conv(**conv_params(1, nfm, stride=2)),
+                Conv(**conv_params(3, nfm)),
+                Conv(**conv_params(1, nfm * 4, relu=False, batch_norm=False))]
+    sidepath = [Conv(**conv_params(1, nfm * 4, stride=2, relu=False, batch_norm=False))]
+    module.append(MergeSum([sidepath, mainpath]))
+    return module
 
-# set up the mapping of layers to optimizers
-opt = MultiOptimizer({'default': opt_vgg, 'Bias': opt_bias,
-     'class_layer': opt_class_layer, 'class_layer_bias': opt_bias_class})
 
-# use cross-entropy cost to train the network
-cost = GeneralizedCost(costfunc=CrossEntropyBinary())
+def create_network(stage_depth):
+    # Structure of the deep residual part of the network:
+    # stage_depth modules of 2 convolutional layers each at feature map depths of 16, 32, 64
+    nfms = [2**(stage + 4) for stage in sorted(list(range(3)) * stage_depth)]
+    strides = [1 if cur == prev else 2 for cur, prev in zip(nfms[1:], nfms[:-1])]
 
-lunaModel = Model(layers=vgg_layers)
+    # Now construct the network
+    layers = [Conv(**conv_params(3, 16))]
+    layers.append(module_s1(nfms[0], True))
 
-if args.model_file:
-    import os
-    assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    lunaModel.load_params(args.model_file)
+    for nfm, stride in zip(nfms[1:], strides):
+        res_module = module_s1(nfm) if stride == 1 else module_s2(nfm)
+        layers.append(res_module)
+    layers.append(BatchNorm())
+    layers.append(Activation(Rectlin()))
+    layers.append(Pooling('all', op='avg'))
+    layers.append(Affine(1, init=Kaiming(local=False), batch_norm=True, activation=Logistic()))
+
+    return Model(layers=layers), GeneralizedCost(costfunc=CrossEntropyBinary())
+
+opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0005, schedule=Schedule([40, 70], 0.1))
+
+
+
+lunaModel, cost = create_network(args.depth)
+
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:
     args.callback_args['eval_freq'] = 1
-   
-
+    
 # configure callbacks
 callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
 # add a callback that saves the best model state
-callbacks.add_save_best_state_callback('LUNA16_VGG_model_no_batch_sigmoid.prm')
+callbacks.add_save_best_state_callback('LUNA16_resnet.prm')
 
-if args.deconv:
-    callbacks.add_deconv_callback(train_set, valid_set)
 
-lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs,
-        cost=cost, callbacks=callbacks)
+lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid.prm')
+lunaModel.save_params('LUNA16_resnet.prm')
 
-neon_logger.display('Calculating metrics on the test set. This could take a while...')
-neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
+# neon_logger.display('Calculating metrics on the test set. This could take a while...')
+# neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
 
-neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))
+# neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))
 
 

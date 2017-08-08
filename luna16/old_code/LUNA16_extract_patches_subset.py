@@ -83,6 +83,9 @@ def extractCandidates(img_file):
     
     # Use SimpleITK to read the mhd image
     itkimage = sitk.ReadImage(img_file)
+
+    # Normalize the image to be 1.0 x 1.0 x 1.0 mm voxel size
+    itkimage = normalize_img(itkimage)
     
     # Get the real world origin (mm) for this image
     originMatrix = np.tile(itkimage.GetOrigin(), (numCandidates,1))  # Real world origin for this image (0,0)
@@ -90,8 +93,7 @@ def extractCandidates(img_file):
     # Subtract the real world origin and scale by the real world (mm per pixel)
     # This should give us the X,Y,Z coordinates for the candidates
     candidatesPixels = (np.round(np.absolute(worldCoords - originMatrix) / itkimage.GetSpacing())).astype(int)
-     
-         
+        
     candidatePatches = []
     
     imgAll = sitk.GetArrayFromImage(itkimage) # Read the image volume
@@ -130,10 +132,6 @@ def extractCandidates(img_file):
         
         #imgPatch = imgAll[zpos, :, :]
         
-        #candidatePosition[:, candNum] = [xpos, ypos]
-        
-        candidatePosition[:, candNum] = [windowSize//2, windowSize//2]
-        
         # Normalize to the Hounsfield units
         imgPatchNorm = normalizePlanes(imgPatch)
         
@@ -161,6 +159,25 @@ def normalizePlanes(npzarray):
     npzarray[npzarray<0] = 0.
     return npzarray
 
+def normalize_img(img):
+    
+    '''
+    Sets the MHD image to be approximately 1.0 mm voxel size
+    
+    https://itk.org/ITKExamples/src/Filtering/ImageGrid/ResampleAnImage/Documentation.html
+    '''
+    new_x_size = int(img.GetSpacing()[0]*img.GetWidth())  # Number of pixels you want for x dimension
+    new_y_size = int(img.GetSpacing()[1]*img.GetHeight()) # Number of pixels you want for y dimension
+    new_z_size = int(img.GetSpacing()[2]*img.GetDepth())  # Number of pixels you want for z dimesion
+    new_size = [new_x_size, new_y_size, new_z_size]
+    
+#     new_spacing = [old_sz*old_spc/new_sz  for old_sz, old_spc, new_sz in zip(img.GetSize(), img.GetSpacing(), new_size)]
+
+    new_spacing = [1,1,1]  # New spacing to be 1.0 x 1.0 x 1.0 mm voxel size
+    interpolator_type = sitk.sitkLinear
+
+    return sitk.Resample(img, new_size, sitk.Transform(), interpolator_type, img.GetOrigin(), new_spacing, img.GetDirection(), 0.0, img.GetPixelIDValue())
+     
 
 from scipy.misc import toimage, imrotate
 

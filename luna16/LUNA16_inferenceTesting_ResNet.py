@@ -66,7 +66,7 @@ test_set = DataLoader(config, be)
 test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
 
 
-lunaModel = Model('LUNA16_VGG_model_no_batch_sigmoid_pretrained.prm')
+lunaModel = Model('LUNA16_resnet.prm')
 
 def round(arr, threshold=0.5):
    '''
@@ -88,7 +88,7 @@ np.set_printoptions(precision=3, suppress=True)
 #print(prob)
 #print(' ')
 
-pred = round(prob, threshold=0.9).astype(int)
+pred = round(prob, threshold=0.5).astype(int)
 print(pred),
 print('predictions')
 print(target),
@@ -113,8 +113,9 @@ if (True):
 
   print('All equal = {}'.format(np.array_equal(pred, target)))
 
-  #print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
-
+  print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
+  print('Indices = {}'.format(np.where(pred != target)[0]))
+  
   from sklearn.metrics import classification_report
 
   print(classification_report(target, pred, target_names=['Class 0', 'Class 1']))

@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-VGG16 on LUNA16 data.
+VGG19 on LUNA16 data.
 
 Command:
 python LUNA16_VGG_no_batch_Sigmoid.py -z 128 -e 200 -b gpu -i 0
@@ -134,11 +134,14 @@ vgg_layers.append(Pooling(2, strides=2))
 vgg_layers.append(Conv((3, 3, 256), **conv_params))
 vgg_layers.append(Conv((3, 3, 256), **conv_params))
 vgg_layers.append(Conv((3, 3, 256), **conv_params))
+vgg_layers.append(Conv((3, 3, 256), **conv_params))
 vgg_layers.append(Pooling(2, strides=2))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
+vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Pooling(2, strides=2))
+vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
 vgg_layers.append(Conv((3, 3, 512), **conv_params))
@@ -148,7 +151,10 @@ vgg_layers.append(Dropout(keep=0.5))
 vgg_layers.append(Affine(nout=4096, init=GlorotUniform(), bias=Constant(0), activation=relu))
 vgg_layers.append(Dropout(keep=0.5))
 
-vgg_layers.append(Affine(nout=1, init=GlorotUniform(), bias=Constant(0), activation=Logistic(), name='class_layer'))
+vgg_layers.append(Affine(nout=512, init=GlorotUniform(), bias=Constant(0), activation=relu))
+vgg_layers.append(Dropout(keep=0.5))
+
+vgg_layers.append(Affine(nout=1, init=GlorotUniform(), bias=Constant(0), activation=Logistic()))
 
 
 # define different optimizers for the class_layer and the rest of the network
@@ -176,7 +182,7 @@ lunaModel = Model(layers=vgg_layers)
 
 # location and size of the VGG weights file
 url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
-filename = 'VGG_D.p'
+filename = 'VGG_E.p' # VGG_E.p is VGG19; VGG_D.p is VGG16
 size = 554227541
 
 # edit filepath below if you have the file elsewhere
@@ -222,16 +228,11 @@ if args.deconv:
 
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-# lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid_pretrained.prm')
+lunaModel.save_params('LUNA16_VGG_model_no_batch_sigmoid_pretrained.prm')
 
-# neon_logger.display('Finished training. Calculating error on the validation set...')
-# neon_logger.display('Misclassification error (validation) = {:.2f}%'.format(lunaModel.eval(valid_set, metric=Misclassification())[0] * 100))
+neon_logger.display('Calculating metrics on the test set. This could take a while...')
+neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
 
-# neon_logger.display('Precision/recall (validation) = {}'.format(lunaModel.eval(valid_set, metric=PrecisionRecall(num_classes=2))))
-
-# neon_logger.display('Calculating metrics on the test set. This could take a while...')
-# neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
-
-# neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))
+neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))
 
 
