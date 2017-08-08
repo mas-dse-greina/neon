@@ -96,7 +96,7 @@ z = z position of slice in world coordinates mm
 #             if np.linalg.norm(center-np.array([p_x,p_y,z]))<=diam:
 #                 mask[int((p_y-origin[1])/spacing[1]),int((p_x-origin[0])/spacing[0])] = 1.0
                
-    # RECTANGULAR MASK
+ 	# RECTANGULAR MASK
     for v_x in v_xrange:
         for v_y in v_yrange:
             
@@ -108,18 +108,24 @@ z = z position of slice in world coordinates mm
                 (p_y >= (center[1] - mask_height)) &
                 (p_y <= (center[1] + mask_height))):
                 
-                mask[int((p_y-origin[1])/spacing[1]),int((p_x-origin[0])/spacing[0])] = 1.0
+                mask[int((np.abs(p_y-origin[1]))/spacing[1]),int((np.abs(p_x-origin[0]))/spacing[0])] = 1.0
             
     
     # TODO:  The height and width seemed to be switched. 
     # This works but needs to be simplified. It's probably due to SimpleITK versus Numpy transposed indicies.
-    left = np.max([0, center[0] - origin[0] - mask_width]).astype(int)
-    right = np.min([width, center[0] - origin[0] + mask_width]).astype(int)
-    down = np.max([0, center[1] - origin[1] - mask_height]).astype(int)
-    up = np.min([height, center[1] - origin[1] + mask_height]).astype(int)
+
+    # NOTE: The np.abs are needed because some of the CT scans have the axes flipped. 
+    # The proper method would be to use simple ITK's GetDirection to determine the
+    # flip and do a matrix transformation. However, the LUNA16 authors promote just
+    # taking the absolute value since it is only a few files that are affected
+    # and it's a simple axis flip.
+    left = np.max([0, np.abs(center[0] - origin[0]) - mask_width]).astype(int)
+    right = np.min([width, np.abs(center[0] - origin[0]) + mask_width]).astype(int)
+    down = np.max([0, np.abs(center[1] - origin[1]) - mask_height]).astype(int)
+    up = np.min([height, np.abs(center[1] - origin[1]) + mask_height]).astype(int)
     
-    top = np.min([depth, center[2] - origin[2] + mask_depth]).astype(int)
-    bottom = np.max([0, center[2] - origin[2] - mask_depth]).astype(int)
+    top = np.min([depth, np.abs(center[2] - origin[2]) + mask_depth]).astype(int)
+    bottom = np.max([0, np.abs(center[2] - origin[2]) - mask_depth]).astype(int)
     
     bbox = [[down, up], [left, right], [bottom, top]]
     
