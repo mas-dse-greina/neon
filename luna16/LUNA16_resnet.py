@@ -24,7 +24,7 @@ python LUNA16_resnet.py -z 128 -e 200 -b gpu -i 0
 """
 
 from neon import logger as neon_logger
-from neon.initializers import Gaussian, GlorotUniform, Xavier, Constant
+
 from neon.optimizers import Adam, Adadelta
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, Affine
@@ -34,10 +34,10 @@ from aeon import DataLoader
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.backends import gen_backend
-from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast, OneHot
+from neon.data.dataloader_transformers import TypeCast
 import numpy as np
 
-from neon.initializers import Kaiming, IdentityInit
+from neon.initializers import Kaiming, IdentityInit, Constant
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Activation, Dropout
 from neon.layers import MergeSum, SkipNode, BatchNorm
 
@@ -67,9 +67,11 @@ print('Batch size = {}'.format(args.batch_size))
 be = gen_backend(**extract_valid_args(args, gen_backend))
 #be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
+patch_size = 32
+
 # Set up the training set to load via aeon
 # Augmentating the data via flipping, rotating, changing contrast/brightness
-image_config = dict(height=64, width=64, flip_enable=True, channels=3,
+image_config = dict(height=patch_size, width=patch_size, flip_enable=True, channels=3,
                     contrast=(0.9,1.1), brightness=(0.9,1.1), 
                     scale=(0.75,0.75), fixed_aspect_ratio=True)
 label_config = dict(binary=False)
@@ -86,7 +88,7 @@ train_set = DataLoader(config, be)
 train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
 
 # Set up the validation set to load via aeon
-image_config = dict(height=64, width=64, channels=3)
+image_config = dict(height=patch_size, width=patch_size, channels=3)
 label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
@@ -98,7 +100,7 @@ valid_set = TypeCast(valid_set, index=0, dtype=np.float32)  # cast image to floa
 
 
 # Set up the testset to load via aeon
-# image_config = dict(height=64, width=64, channels=3)
+# image_config = dict(height=patch_size, width=patch_size, channels=3)
 # label_config = dict(binary=False)
 # config = dict(type="image,label",
 #               image=image_config,
@@ -109,66 +111,67 @@ valid_set = TypeCast(valid_set, index=0, dtype=np.float32)  # cast image to floa
 # test_set = DataLoader(config, be)
 # test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
 
+'''
+ResNet Model
+Taken from https://github.com/NervanaSystems/neon_course/blob/master/06%20Deep%20Residual%20Network.ipynb
+'''
 
-
+# helper functions simplify init params for conv and identity layers
 def conv_params(fsize, nfm, stride=1, relu=True, batch_norm=True):
-    return dict(fshape=(fsize, fsize, nfm), strides=stride, padding=(1 if fsize > 1 else 0),
+    return dict(fshape=(fsize, fsize, nfm), 
+                strides=stride, 
+                padding=(1 if fsize > 1 else 0),
                 activation=(Rectlin() if relu else None),
                 init=Kaiming(local=True),
                 batch_norm=batch_norm)
 
+def id_params(nfm):
+    return dict(fshape=(1, 1, nfm), 
+                strides=2, 
+                padding=0, 
+                activation=None, 
+                init=IdentityInit())
 
-def module_s1(nfm, first=False):
-    '''
-    non-strided
-    '''
-    sidepath = Conv(**conv_params(1, nfm * 4, 1, False, False)) if first else SkipNode()
-    mainpath = [] if first else [BatchNorm(), Activation(Rectlin())]
-    mainpath.append(Conv(**conv_params(1, nfm)))
-    mainpath.append(Conv(**conv_params(3, nfm)))
-    mainpath.append(Conv(**conv_params(1, nfm * 4, relu=False, batch_norm=False)))
+# A resnet module
+#
+#             - Conv - Conv - 
+#           /                \
+# input   -                   Sum - Relu - output
+#           \               /
+#            -  Identity - 
+#
+def module_factory(nfm, stride=1):
+    mainpath = [Conv(**conv_params(3, nfm, stride=stride)),
+                Conv(**conv_params(3, nfm, relu=False))]
+    sidepath = [SkipNode() if stride == 1 else Conv(**id_params(nfm))]
 
-    return MergeSum([sidepath, mainpath])
-
-
-def module_s2(nfm):
-    '''
-    strided
-    '''
-    module = [BatchNorm(), Activation(Rectlin())]
-    mainpath = [Conv(**conv_params(1, nfm, stride=2)),
-                Conv(**conv_params(3, nfm)),
-                Conv(**conv_params(1, nfm * 4, relu=False, batch_norm=False))]
-    sidepath = [Conv(**conv_params(1, nfm * 4, stride=2, relu=False, batch_norm=False))]
-    module.append(MergeSum([sidepath, mainpath]))
+    module = [MergeSum([mainpath, sidepath]),
+              Activation(Rectlin())]
     return module
 
+# Set depth = 3 for quick results 
+# or depth = 9 to reach 6.7% top1 error in 150 epochs
+nfms = [2**(stage + 4) for stage in sorted(range(3) * args.depth)]
+strides = [1] + [1 if cur == prev else 2 for cur, prev in zip(nfms[1:], nfms[:-1])]
 
-def create_network(stage_depth):
-    # Structure of the deep residual part of the network:
-    # stage_depth modules of 2 convolutional layers each at feature map depths of 16, 32, 64
-    nfms = [2**(stage + 4) for stage in sorted(list(range(3)) * stage_depth)]
-    strides = [1 if cur == prev else 2 for cur, prev in zip(nfms[1:], nfms[:-1])]
+layers = [Conv(**conv_params(3, 16))]
+for nfm, stride in zip(nfms, strides):
+    layers.append(module_factory(nfm, stride))
 
-    # Now construct the network
-    layers = [Conv(**conv_params(3, 16))]
-    layers.append(module_s1(nfms[0], True))
+layers.append(Pooling('all', op='avg'))
 
-    for nfm, stride in zip(nfms[1:], strides):
-        res_module = module_s1(nfm) if stride == 1 else module_s2(nfm)
-        layers.append(res_module)
-    layers.append(BatchNorm())
-    layers.append(Activation(Rectlin()))
-    layers.append(Pooling('all', op='avg'))
-    layers.append(Affine(1, init=Kaiming(local=False), batch_norm=True, activation=Logistic()))
+layers.append(Affine(10, init=Kaiming(local=False), 
+                     batch_norm=True, activation=Rectlin()))
 
-    return Model(layers=layers), GeneralizedCost(costfunc=CrossEntropyBinary())
+layers.append(Affine(1, init=Kaiming(local=False), 
+                     batch_norm=True, activation=Logistic()))
 
-opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0005, schedule=Schedule([40, 70], 0.1))
+lunaModel = Model(layers=layers)
 
+cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
+opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=Schedule([90, 135], 0.1))
 
-lunaModel, cost = create_network(args.depth)
 
 
 # configure callbacks
@@ -178,12 +181,12 @@ if args.callback_args['eval_freq'] is None:
 # configure callbacks
 callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
 # add a callback that saves the best model state
-callbacks.add_save_best_state_callback('LUNA16_resnet_trans.prm')
+callbacks.add_save_best_state_callback('LUNA16_resnet_32.prm')
 
 
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-lunaModel.save_params('LUNA16_resnet_trans.prm')
+lunaModel.save_params('LUNA16_resnet_32.prm')
 
 # neon_logger.display('Calculating metrics on the test set. This could take a while...')
 # neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
