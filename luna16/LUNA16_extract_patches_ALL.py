@@ -32,7 +32,7 @@ import logging
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 
-parser.add_argument("--subset", default='subset0',
+parser.add_argument("--subset", default='subset9',
                     help='LUNA16 subset directory to process')
 
 args = parser.parse_args()
@@ -172,78 +172,36 @@ Save the image patches for a given data file
 """
 # We need to save the array as an image.
 # This is the easiest way. Matplotlib seems to like adding a white border that is hard to kill.
-def SavePatches(manifestFilename_trans, manifestFilename_sag, manifestFilename_cor,
-                        img_file, patchesArray_trans, patchesArray_sag, patchesArray_cor, valuesArray):
+def SavePatches(manifestFilename, img_file, patchesArray_trans, patchesArray_sag, patchesArray_cor, valuesArray):
     
-    saveDir = ntpath.dirname(img_file) + '/patches_augmented'
+    saveDir = ntpath.dirname(img_file) + '/patches_ALL'
 
     try:
         os.stat(saveDir)
     except:
         os.mkdir(saveDir) 
 
-    f_trans = open(manifestFilename_trans, 'a')
-    f_sag = open(manifestFilename_sag, 'a')
-    f_cor = open(manifestFilename_cor, 'a')
-    
-    subjectName = ntpath.splitext(ntpath.basename(img_file))[0]
-    
+    with open(manifestFilename, 'a') as f:  # Write to the manifest file for aeon loader
 
-    # Try to balance the number of negative and number of positive patches
-    maxNegatives = (len(np.where(valuesArray==1)[0]) + 1)*20 # Number of negatives as function of number of positives
-    numNegatives = 0
+        subjectName = ntpath.splitext(ntpath.basename(img_file))[0]
+        
 
-    print('Saving image patches for file {}/{}.'.format(SUBSET, subjectName))
-    for i in range(len(valuesArray)):
+        print('Saving image patches for file {}/{}.'.format(SUBSET, subjectName))
+        for i in range(len(valuesArray)):
 
-        if (valuesArray[i] == 0):
-            numNegatives += 1
-
-        if (valuesArray[i] == 1) | (numNegatives <= maxNegatives):
-
+          
             #print('\r{} of {}'.format(i+1, len(valuesArray))),
-
-            # TRANSVERSE SLICE
             im = toimage(patchesArray_trans[i])
 
-            pngName = saveDir + '/{}_{}_{}_trans.png'.format(subjectName, i, valuesArray[i])
+            pngName = saveDir + '/{}_{}_{}.png'.format(subjectName, i, valuesArray[i])
             im.save(pngName)
 
-            f_trans.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
+            f.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
 
+                
+        f.close()
 
-            # CORONAL SLICE
-            im = toimage(patchesArray_cor[i])
-
-            pngName = saveDir + '/{}_{}_{}_cor.png'.format(subjectName, i, valuesArray[i])
-            im.save(pngName)
-
-            f_cor.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
-
-            # SAGITTAL SLICE
-            im = toimage(patchesArray_sag[i])
-
-            pngName = saveDir + '/{}_{}_{}_sag.png'.format(subjectName, i, valuesArray[i])
-            im.save(pngName)
-
-            f_sag.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
-
-            # if (valuesArray[i] == 1):  # Augment positives by rotation
-
-            #     for angle in [90, 180, 270]:
-
-            #         pngName = saveDir + '/{}_{}_{}_{}_trans.png'.format(subjectName, i, angle, valuesArray[i])
-            #         im = toimage(imrotate(patchesArray_trans[i], angle))  # Rotate the image and save
-            #         im.save(pngName)
-
-            #         f_trans.write('{},label_{}.txt\n'.format(pngName, valuesArray[i]))
-
-
-    f_trans.close()
-    f_sag.close()
-    f_cor.close()
-
-    print('{}: Finished {}\n'.format(SUBSET, subjectName))
+        print('{}: Finished {}\n'.format(SUBSET, subjectName))
 
 def extract_candidates(img_file):
 
@@ -343,18 +301,8 @@ Loop through all .mhd files within the data directory and process them.
 """
 
 # Reset the manifest file to empty
-manifestFilename_trans = 'manifest_{}_augmented_trans.csv'.format(SUBSET)
-f = open(manifestFilename_trans, 'w')
-f.close()
-
-# Reset the manifest file to empty
-manifestFilename_sag = 'manifest_{}_augmented_sag.csv'.format(SUBSET)
-f = open(manifestFilename_sag, 'w')
-f.close()
-
-# Reset the manifest file to empty
-manifestFilename_cor = 'manifest_{}_augmented_cor.csv'.format(SUBSET)
-f = open(manifestFilename_cor, 'w')
+manifestFilename = 'manifest_{}_ALL.csv'.format(SUBSET)
+f = open(manifestFilename, 'w')
 f.close()
 
 for root, dirs, files in os.walk(DATA_DIR+SUBSET):
@@ -368,6 +316,5 @@ for root, dirs, files in os.walk(DATA_DIR+SUBSET):
 
             patchesArray_trans, patchesArray_sag, patchesArray_cor,  valuesArray = extract_candidates(img_file)   
              
-            SavePatches(manifestFilename_trans, manifestFilename_sag, manifestFilename_cor,
-                        img_file, patchesArray_trans, patchesArray_sag, patchesArray_cor, valuesArray)
+            SavePatches(manifestFilename, img_file, patchesArray_trans, patchesArray_sag, patchesArray_cor, valuesArray)
                 

@@ -14,12 +14,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-ResNet on LUNA16 data.
+ResNet with three merged layers from the 2D convolutions of 
+transverse, sagittal, and coronal planes.
 
 Command:
-python LUNA16_resnet.py -z 128 -e 200 -b gpu -i 0
-
-
+python LUNA16_resnet_3D_merge.py -z 128 -e 200 -b gpu -i 0
 
 """
 
@@ -27,7 +26,7 @@ from neon import logger as neon_logger
 from neon.initializers import Gaussian, GlorotUniform, Xavier, Constant
 from neon.optimizers import Adam, Adadelta
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
-from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, Affine
+from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, Affine, MergeMultistream, Sequential
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Logistic, CrossEntropyBinary, Misclassification, PrecisionRecall
 from neon.models import Model
 from aeon import DataLoader
@@ -73,43 +72,36 @@ image_config = dict(height=64, width=64, flip_enable=True, channels=3,
                     contrast=(0.9,1.1), brightness=(0.9,1.1), 
                     scale=(0.75,0.75), fixed_aspect_ratio=True)
 label_config = dict(binary=False)
-config = dict(type="image,label",
+
+
+config = dict(type="image,image,image,label",
+                image=image_config,
+                label=label_config,
+                manifest_filename='manifest_all_but_9_planes.csv',
+                minibatch_size=args.batch_size,
+                macrobatch_size=128,
+                cache_directory='cache_dir',
+                shuffle_manifest=True)
+                #shuffle_every_epoch = True)
+
+dataset = DataLoader(config, be)
+train_set = TypeCast(dataset, index=0, dtype=np.float32) # cast image to float
+
+# Set up the validation set to load via aeon
+image_config = dict(height=64, width=64, channels=3)
+label_config = dict(binary=False)
+
+config = dict(type="image,image,image,label",
               image=image_config,
               label=label_config,
-              manifest_filename='manifest_all_but_9_trans.csv',
+              manifest_filename='manifest_subset9_augmented_planes.csv',
               minibatch_size=args.batch_size,
               macrobatch_size=128,
               cache_directory='cache_dir',
               shuffle_manifest=True)
               #shuffle_every_epoch = True)
-train_set = DataLoader(config, be)
-train_set = TypeCast(train_set, index=0, dtype=np.float32)  # cast image to float
-
-# Set up the validation set to load via aeon
-image_config = dict(height=64, width=64, channels=3)
-label_config = dict(binary=False)
-config = dict(type="image,label",
-              image=image_config,
-              label=label_config,
-              manifest_filename='manifest_subset9_augmented_trans.csv',
-              minibatch_size=args.batch_size)
-valid_set = DataLoader(config, be)
-valid_set = TypeCast(valid_set, index=0, dtype=np.float32)  # cast image to float
-
-
-# Set up the testset to load via aeon
-# image_config = dict(height=64, width=64, channels=3)
-# label_config = dict(binary=False)
-# config = dict(type="image,label",
-#               image=image_config,
-#               label=label_config,
-#               manifest_filename='manifest_subset1_augmented.csv',
-#               minibatch_size=args.batch_size,
-#               subset_fraction=1.0)
-# test_set = DataLoader(config, be)
-# test_set = TypeCast(test_set, index=0, dtype=np.float32)  # cast image to float
-
-
+dataset = DataLoader(config, be)
+valid_set = TypeCast(dataset, index=0, dtype=np.float32) # cast image to float
 
 def conv_params(fsize, nfm, stride=1, relu=True, batch_norm=True):
     return dict(fshape=(fsize, fsize, nfm), strides=stride, padding=(1 if fsize > 1 else 0),
@@ -144,7 +136,7 @@ def module_s2(nfm):
     return module
 
 
-def create_network(stage_depth):
+def create_layers(stage_depth):
     # Structure of the deep residual part of the network:
     # stage_depth modules of 2 convolutional layers each at feature map depths of 16, 32, 64
     nfms = [2**(stage + 4) for stage in sorted(list(range(3)) * stage_depth)]
@@ -157,19 +149,49 @@ def create_network(stage_depth):
     for nfm, stride in zip(nfms[1:], strides):
         res_module = module_s1(nfm) if stride == 1 else module_s2(nfm)
         layers.append(res_module)
-    layers.append(BatchNorm())
-    layers.append(Activation(Rectlin()))
-    layers.append(Pooling('all', op='avg'))
-    layers.append(Affine(1, init=Kaiming(local=False), batch_norm=True, activation=Logistic()))
+    # layers.append(BatchNorm())
+    # layers.append(Activation(Rectlin()))
+    # layers.append(Pooling('all', op='avg'))
+    # layers.append(Affine(1, init=Kaiming(local=False), batch_norm=True, activation=Logistic()))
 
-    return Model(layers=layers), GeneralizedCost(costfunc=CrossEntropyBinary())
+    return layers
 
 opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0005, schedule=Schedule([40, 70], 0.1))
 
+cost = GeneralizedCost(costfunc=CrossEntropyBinary())
+
+# Create three separate streams: transverse, coronal, and sagittal 2D planes
+lunaModel_trans = Sequential(create_layers(args.depth)) # transverse plane
+
+lunaModel_sag = Sequential(create_layers(args.depth))   # sagittal plane
+
+lunaModel_cor = Sequential(create_layers(args.depth))   # coronal plane
+
+# Merge all 3 streams together.
+layers = [MergeMultistream(layers=[lunaModel_trans, lunaModel_sag, lunaModel_cor], merge='stack')]
+
+layers.append(BatchNorm())
+layers.append(Activation(Rectlin()))
+layers.append(Pooling('all', op='avg'))
+layers.append(Affine(1, init=Kaiming(local=False), batch_norm=True, activation=Logistic()))
 
 
-lunaModel, cost = create_network(args.depth)
 
+
+
+# initialize model
+path1 = Sequential(layers=[Affine(nout=100, init=Kaiming(local=False), activation=Rectlin()),
+                           Affine(nout=100, init=Kaiming(local=False), activation=Rectlin())])
+
+path2 = Sequential(layers=[Affine(nout=100, init=Kaiming(local=False), activation=Rectlin()),
+                           Affine(nout=100, init=Kaiming(local=False), activation=Rectlin())])
+
+layers = [MergeMultistream(layers=[path1, path2, path1], merge="stack"),
+          Affine(nout=10, init=Kaiming(local=False), activation=Logistic(shortcut=True))]
+
+
+
+lunaModel = Model(layers=layers)
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:
@@ -178,16 +200,11 @@ if args.callback_args['eval_freq'] is None:
 # configure callbacks
 callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
 # add a callback that saves the best model state
-callbacks.add_save_best_state_callback('LUNA16_resnet_trans.prm')
+callbacks.add_save_best_state_callback('LUNA16_resnet_3D_merge.prm')
 
 
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-lunaModel.save_params('LUNA16_resnet_trans.prm')
-
-# neon_logger.display('Calculating metrics on the test set. This could take a while...')
-# neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
-
-# neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))
+lunaModel.save_params('LUNA16_resnet_3D_merge.prm')
 
 

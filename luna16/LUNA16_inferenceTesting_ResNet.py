@@ -16,7 +16,7 @@
 """
 Load and test a pre-trained model against the entire data subset.
 
-python LUNA16_inferenceTestingVGG_noBatch_Sigmoid.py -b gpu -i 0 -z 32
+python LUNA16_inferenceTesting_ResNet.py -b gpu -i 0 -z 128
 
 """
 
@@ -34,10 +34,8 @@ import pandas as pd
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-testFileName = 'manifest_subset9_ALL.csv'
-#testFileName = 'manifest_subset7_LARGER.csv'
-#testFileName = 'manifest_subset7_ALL.csv'
-#testFileName = 'manifest_ALL30_same.csv'
+#testFileName = 'manifest_subset2_augmented.csv'
+testFileName = 'manifest_subset9_augmented.csv'
 
 # hyperparameters
 num_epochs = args.epochs
@@ -88,33 +86,33 @@ np.set_printoptions(precision=3, suppress=True)
 #print(prob)
 #print(' ')
 
-pred = round(prob, threshold=0.5).astype(int)
-print(pred),
-print('predictions')
-print(target),
-print('targets')
+pred = round(prob, threshold=0.9).astype(int)
+# print(pred),
+# print('predictions')
+# print(target),
+# print('targets')
 
-print('Predict 1 count = {}'.format(len(np.where(pred == 1)[0])))
-print('True 1 count= {}'.format(len(np.where(target == 1)[0])))
+# print('Predict 1 count = {}'.format(len(np.where(pred == 1)[0])))
+# print('True 1 count= {}'.format(len(np.where(target == 1)[0])))
 
-print('Predict 0 count = {}'.format(len(np.where(pred == 0)[0])))
-print('True 0 count= {}'.format(len(np.where(target == 0)[0])))
+# print('Predict 0 count = {}'.format(len(np.where(pred == 0)[0])))
+# print('True 0 count= {}'.format(len(np.where(target == 0)[0])))
 
-target_zero_idx = np.where(target == 0)[0]
-target_one_idx = np.where(target == 1)[0]
+# target_zero_idx = np.where(target == 0)[0]
+# target_one_idx = np.where(target == 1)[0]
 
-false_positive = len(np.where(pred[target_zero_idx] == 1)[0])
-false_negative = len(np.where(pred[target_one_idx] == 0)[0])
+# false_positive = len(np.where(pred[target_zero_idx] == 1)[0])
+# false_negative = len(np.where(pred[target_one_idx] == 0)[0])
 
-print('False positive count = {}'.format(false_positive))
-print('False negative count = {}'.format(false_negative))
+# print('False positive count = {}'.format(false_positive))
+# print('False negative count = {}'.format(false_negative))
 
 if (True):
 
-  print('All equal = {}'.format(np.array_equal(pred, target)))
+  # print('All equal = {}'.format(np.array_equal(pred, target)))
 
-  print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
-  print('Indices = {}'.format(np.where(pred != target)[0]))
+  # print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
+  # print('Indices = {}'.format(np.where(pred != target)[0]))
   
   from sklearn.metrics import classification_report
 
@@ -122,9 +120,9 @@ if (True):
 
   # neon_logger.display('Calculating metrics on the test set. This could take a while...')
 
-  # misclassification = lunaModel.eval(test_set, metric=Misclassification())
-  # neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
+  misclassification = lunaModel.eval(test_set, metric=Misclassification())
+  neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
 
-  # precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
-  # neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
+  precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
+  neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
 
