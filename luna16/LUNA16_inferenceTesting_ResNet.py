@@ -36,6 +36,7 @@ args = parser.parse_args()
 
 #testFileName = 'manifest_subset2_augmented.csv'
 testFileName = 'manifest_subset9_augmented.csv'
+#testFileName = 'manifest_subset9_ALL.csv'
 
 # hyperparameters
 num_epochs = args.epochs
@@ -51,8 +52,10 @@ print('Batch size = {}'.format(args.batch_size))
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
+window_size = 64
+
 # Set up the testset to load via aeon
-image_config = dict(height=64, width=64, channels=3)
+image_config = dict(height=window_size, width=window_size, channels=3)
 label_config = dict(binary=False)
 config = dict(type="image,label",
               image=image_config,
@@ -120,9 +123,9 @@ if (True):
 
   # neon_logger.display('Calculating metrics on the test set. This could take a while...')
 
-  misclassification = lunaModel.eval(test_set, metric=Misclassification())
-  neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
+  # misclassification = lunaModel.eval(test_set, metric=Misclassification())
+  # neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
 
-  precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
-  neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
+  # precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
+  # neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
 
