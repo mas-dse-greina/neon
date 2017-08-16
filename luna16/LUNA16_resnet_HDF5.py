@@ -70,7 +70,7 @@ print('Batch size = {}'.format(args.batch_size))
 be = gen_backend(**extract_valid_args(args, gen_backend))
 #be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
-train_set = HDF5Iterator('luna16_roi_subset0_augmented.h5')
+train_set = HDF5Iterator('luna16_roi_except_subset9_augmented.h5')
 valid_set = HDF5Iterator('luna16_roi_subset9_augmented.h5')
 
 '''

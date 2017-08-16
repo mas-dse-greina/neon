@@ -1,4 +1,6 @@
+*.h5
 *.csv
 *.txt
 TUTORIAL/*
 evaluationScript/*
+data/

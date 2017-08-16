@@ -31,11 +31,13 @@ import h5py
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 
-parser.add_argument("--subset", default='subset0',
+parser.add_argument('--subset', default='subset0',
                     help='LUNA16 subset directory to process')
-
-parser.add_argument("--augment", action='store_true',
+parser.add_argument('--augment', action='store_true',
                     help='Augment class 1 and subsample class 0 for better class balance.')
+
+parser.add_argument('--exclude', action='store_true',
+                    help='Exclude this subset.')
 
 args = parser.parse_args()
 
@@ -46,13 +48,14 @@ args = parser.parse_args()
 # 7za e subset5.zip
 
 DATA_DIR = '/mnt/data/medical/luna16/'
+EXCLUDE_DIR = args.exclude # include all directories except the subset one; otherwise just include the subset
 SUBSET = args.subset
 cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
 window_depth = 32 # This is really the half depth so window will be double this depth
-
+num_channels = 3
 
 def find_bbox(center, origin,  
               mask_width, mask_height, mask_depth,
@@ -210,18 +213,34 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
     #                                 bbox[0][0]:bbox[0][1], 
     #                                 bbox[1][0]:bbox[1][1]])
 
-    img = normalizePlanes(img_array[voxel_center[2], 
+    img1 = normalizePlanes(img_array[voxel_center[2], 
                                     bbox[0][0]:bbox[0][1], 
                                     bbox[1][0]:bbox[1][1]])
 
     
-    img = np.squeeze(img)
+    img1 = np.squeeze(img1)
+
+    img2 = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+                                    voxel_center[1], 
+                                    bbox[1][0]:bbox[1][1]])
+
+    img2 = np.squeeze(img2)
+
+    img3 = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+                                    bbox[0][0]:bbox[0][1], 
+                                    voxel_center[0]])
+
+    img3 = np.squeeze(img3)
+    
+    img = [img1, img2, img3]
 
     # Then we need to flatten the array to a single vector (1, C*H*W*D)
     #imgTensor = img.transpose([1, 2, 0]).ravel().reshape(1,-1)
 
     if (np.sum(pad_needed) == 0):
-        imgTensor = img.ravel().reshape(1,-1)
+
+        imgTensor = np.array(img).ravel().reshape(1,-1)
+
 
     else:
         imgTensor = None
@@ -233,7 +252,7 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
 Loop through all .mhd files within the data directory and process them.
 """
 USE_AUGMENTATION = args.augment
-EXCLUDE_DIR = True # include all directories except the subset one; otherwise just include the subset
+
 if EXCLUDE_DIR:
     excludeName = 'except_'
     DATA_DIR_DESCEND = DATA_DIR
@@ -250,7 +269,8 @@ firstTensor = True
 
 
 valuesArray = []
-tensorShape = 1*(window_height*2)*(window_width*2)*1 # CxHxWxD
+tensorShape = num_channels*(window_height*2)*(window_width*2) #*(window_depth*2) # CxHxWxD
+
 
 def writeToHDF(img, dset, val, valuesArray):
 
@@ -288,7 +308,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 10
+                numNegatives = 20
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -318,32 +338,59 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                         elif (candidateValues[candidate_idx] == 0) & (numNegatives > 0):
 
                             # Flip a coin to determine if we keep this negative sample
-                            if (np.random.random_sample() > 0.5):
+                            if (np.random.random_sample() > 0.7):
                                 writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
 
                                 numNegatives -= 1
 
-                        # Augment positives by rotation 
+                        
                         elif (candidateValues[candidate_idx] == 1):
 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
 
-                            img = imgTensor.reshape(window_height*2, window_width*2)
+                            img = imgTensor.reshape(3, window_height*2, window_width*2)
+                            img = img.transpose([1, 2, 0])
 
-                            writeToHDF(np.ravel(np.rot90(img)), dset, candidateValues[candidate_idx], valuesArray)
+                            # Augment positives by rotation 
 
-                            writeToHDF(np.ravel(np.rot90(img),3), dset, candidateValues[candidate_idx], valuesArray)
+                            # 90 degree rotation
+                            img90 = np.rot90(img, k=1)
+                            img90 = img90.transpose([2, 0, 1])
 
-                            writeToHDF(np.ravel(np.flipud(img)), dset, candidateValues[candidate_idx], valuesArray)
+                            # 180 degree rotation
+                            img180 = np.rot90(img, k=2)
+                            img180 = img180.transpose([2, 0, 1])
 
-                            writeToHDF(np.ravel(np.fliplr(img)), dset, candidateValues[candidate_idx], valuesArray)
+                            # 270 degree rotation
+                            img270 = np.rot90(img, k=3)
+                            img270 = img270.transpose([2, 0, 1])
+
+                            # Flip left/right
+                            img1 = np.fliplr(np.squeeze(img[0,:,:]))
+                            img2 = np.fliplr(np.squeeze(img[1,:,:]))
+                            img3 = np.fliplr(np.squeeze(img[2,:,:]))
+                            imgFlip = np.array([img1, img2, img3])
+
+                            # 90 degree rotation flipped
+                            img90Flip = np.rot90(imgFlip, k=1)
+                            img90Flip = img90.transpose([2, 0, 1])
+
+                            writeToHDF(np.ravel(img90), dset, candidateValues[candidate_idx], valuesArray)
+
+                            writeToHDF(np.ravel(img180), dset, candidateValues[candidate_idx], valuesArray)
+
+                            writeToHDF(np.ravel(img270), dset, candidateValues[candidate_idx], valuesArray)
+
+                            writeToHDF(np.ravel(imgFlip), dset, candidateValues[candidate_idx], valuesArray)
+
+                            writeToHDF(np.ravel(img90Flip), dset, candidateValues[candidate_idx], valuesArray)
 
 
     print('Writing shape and output to HDF5 file.')
 
     # Output attribute 'lshape' to let neon know the shape of the tensor.
     #df['input'].attrs['lshape'] = (1, window_height, window_width, window_depth) # (Channel, Height, Width, Depth)
-    df['input'].attrs['lshape'] = (1, window_height*2, window_width*2) # (Channel, Height, Width, Depth)
+    df['input'].attrs['lshape'] = (num_channels, window_height*2, window_width*2) # (Channel, Height, Width, Depth)
     
     
     # Output the labels

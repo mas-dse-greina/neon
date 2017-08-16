@@ -75,7 +75,7 @@ np.set_printoptions(precision=3, suppress=True)
 #print(prob)
 #print(' ')
 
-pred = round(prob, threshold=0.9).astype(int)
+pred = round(prob, threshold=0.5).astype(int)
 # print(pred),
 # print('predictions')
 # print(target),
