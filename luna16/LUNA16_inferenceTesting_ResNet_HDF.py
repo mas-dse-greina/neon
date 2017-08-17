@@ -36,8 +36,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 
-#testFileName = 'luna16_roi_subset9_augmented.h5'
-testFileName = 'luna16_roi_subset9_ALL.h5'
+testFileName = '/mnt/data/medical/luna16/luna16_roi_subset9_augmented.h5'
+#testFileName = '/mnt/data/medical/luna16/luna16_roi_subset9_ALL.h5'
 
 # Next line gets rid of the deterministic warning
 args.deterministic = None
@@ -103,9 +103,11 @@ if (True):
   # print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
   # print('Indices = {}'.format(np.where(pred != target)[0]))
   
-  from sklearn.metrics import classification_report
+  from sklearn.metrics import classification_report, roc_auc_score
 
   print(classification_report(target, pred, target_names=['Class 0', 'Class 1']))
+
+  print('Area under the curve = {}'.format(roc_auc_score(target, prob)))
 
   # neon_logger.display('Calculating metrics on the test set. This could take a while...')
 

@@ -50,7 +50,7 @@ from neon.data import HDF5Iterator
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('--depth', type=int, default=18,
+parser.add_argument('--depth', type=int, default=50,
                     help='choices 18, 34, 50, 101, 152')
 
 args = parser.parse_args()
@@ -70,8 +70,8 @@ print('Batch size = {}'.format(args.batch_size))
 be = gen_backend(**extract_valid_args(args, gen_backend))
 #be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
-train_set = HDF5Iterator('luna16_roi_except_subset9_augmented.h5')
-valid_set = HDF5Iterator('luna16_roi_subset9_augmented.h5')
+train_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_except_subset9_augmented.h5')
+valid_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_subset9_augmented.h5')
 
 '''
 ResNet Model
@@ -159,7 +159,7 @@ modelFileName = 'LUNA16_resnetHDF.prm'
 #   lunaModel = Model(modelFileName)
 
 weight_sched = Schedule([30, 60], 0.1)
-opt = Adam() #GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
+opt = Adadelta() #GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:

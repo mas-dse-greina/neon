@@ -50,12 +50,12 @@ args = parser.parse_args()
 DATA_DIR = '/mnt/data/medical/luna16/'
 EXCLUDE_DIR = args.exclude # include all directories except the subset one; otherwise just include the subset
 SUBSET = args.subset
-cand_path = 'CSVFILES/candidates_with_annotations.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
 window_depth = 32 # This is really the half depth so window will be double this depth
-num_channels = 3
+num_channels = 1
 
 def find_bbox(center, origin,  
               mask_width, mask_height, mask_depth,
@@ -146,13 +146,13 @@ def normalize_img(img):
     
 """
 Normalize pixel depth into Hounsfield units (HU)
-This tries to get all pixels between -1000 and 400 HU.
+This tries to get all pixels between -1000 and 2000 HU.
 All other HU will be masked.
 Then we normalize pixel values between 0 and 1.
 """
 def normalizePlanes(npzarray):
      
-    maxHU = 400.
+    maxHU = 2000.
     minHU = -1000.
  
     npzarray = (npzarray - minHU) / (maxHU - minHU)
@@ -208,38 +208,17 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
     bbox, pad_needed = find_bbox(center, origin, window_width, window_height, window_depth,
                               slice_z, height, width)
         
-    # ROI volume tensor
-    # img = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
-    #                                 bbox[0][0]:bbox[0][1], 
-    #                                 bbox[1][0]:bbox[1][1]])
-
-    img1 = normalizePlanes(img_array[voxel_center[2], 
-                                    bbox[0][0]:bbox[0][1], 
-                                    bbox[1][0]:bbox[1][1]])
-
-    
-    img1 = np.squeeze(img1)
-
-    img2 = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
-                                    voxel_center[1], 
-                                    bbox[1][0]:bbox[1][1]])
-
-    img2 = np.squeeze(img2)
-
-    img3 = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
-                                    bbox[0][0]:bbox[0][1], 
-                                    voxel_center[0]])
-
-    img3 = np.squeeze(img3)
-    
-    img = [img1, img2, img3]
-
-    # Then we need to flatten the array to a single vector (1, C*H*W*D)
-    #imgTensor = img.transpose([1, 2, 0]).ravel().reshape(1,-1)
-
     if (np.sum(pad_needed) == 0):
 
-        imgTensor = np.array(img).ravel().reshape(1,-1)
+        # ROI volume tensor
+        img = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+                                        bbox[0][0]:bbox[0][1], 
+                                        bbox[1][0]:bbox[1][1]])
+        
+        #img = img.transpose([1, 2, 0])  # Height, Width, Depth
+
+        # Then we need to flatten the array to a single vector (1, C*H*W*D)
+        imgTensor = img.ravel().reshape(1,-1)
 
 
     else:
@@ -261,15 +240,15 @@ else:
     DATA_DIR_DESCEND = DATA_DIR + SUBSET
 
 if USE_AUGMENTATION:
-    outFilename = 'luna16_roi_' + excludeName + SUBSET + '_augmented.h5'
+    outFilename = DATA_DIR + 'luna16_roi_' + excludeName + SUBSET + '_augmented.h5'
 else:
-    outFilename = 'luna16_roi_' + excludeName + SUBSET + '_ALL.h5'
+    outFilename = DATA_DIR + 'luna16_roi_' + excludeName + SUBSET + '_ALL.h5'
 
 firstTensor = True
 
 
 valuesArray = []
-tensorShape = num_channels*(window_height*2)*(window_width*2) #*(window_depth*2) # CxHxWxD
+tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) # CxHxWxD
 
 
 def writeToHDF(img, dset, val, valuesArray):
@@ -280,6 +259,17 @@ def writeToHDF(img, dset, val, valuesArray):
     dset[row, :] = imgTensor  # Append the new row to the dataset
 
     valuesArray.append(val)
+
+# "Sharpens" by just suppressing any pixels less than a certain value
+# Using for added data augmentation
+def sharpen(m):
+
+    m[m < 0.3] = 0
+    m = m / np.max(m)
+
+'''
+Main
+'''
 
 with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM dataset
 
@@ -308,7 +298,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 20
+                numNegatives = 100
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -316,10 +306,6 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                                                np.array(itk_img.GetOrigin()), np.array(itk_img.GetSpacing()))
 
                     if (imgTensor is not None):
-
-                        if (imgTensor.shape[1] != tensorShape):
-                                print('ERROR!!!!! Wrong size {}'.format(imgTensor.shape))
-                                exit()
 
                         if (firstTensor): # For first value we need to create the dataset
 
@@ -338,59 +324,55 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                         elif (candidateValues[candidate_idx] == 0) & (numNegatives > 0):
 
                             # Flip a coin to determine if we keep this negative sample
-                            if (np.random.random_sample() > 0.7):
+                            if (True): #(np.random.random_sample() > 0.5):
                                 writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
 
-                                numNegatives -= 1
+                                #numNegatives -= 1
 
                         
                         elif (candidateValues[candidate_idx] == 1):
 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
 
-                            img = imgTensor.reshape(3, window_height*2, window_width*2)
-                            img = img.transpose([1, 2, 0])
+                            img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_width*2)
+
+                            # Augment by sharpening
+                            writeToHDF(np.ravel(sharpen(img)), dset, candidateValues[candidate_idx], valuesArray)
+                            
+                            imgFlipH = img[:,::-1,:,:] # Flip height dimension
+                            imgFlipW = img[:,:,::-1,:] # Flip width dimension
+                            imgFlipD = img[:,:,:,::-1] # Flip depth dimension
+
+                            writeToHDF(np.ravel(imgFlipH), dset, candidateValues[candidate_idx], valuesArray)
+
+                            writeToHDF(np.ravel(imgFlipW), dset, candidateValues[candidate_idx], valuesArray)
+
+                            writeToHDF(np.ravel(imgFlipD), dset, candidateValues[candidate_idx], valuesArray)
+
 
                             # Augment positives by rotation 
+                            img90h = np.rot90(img.transpose([1,2,3,0])).transpose([3,0,1,2]) # Rotate 90 deg height dimension
 
-                            # 90 degree rotation
-                            img90 = np.rot90(img, k=1)
-                            img90 = img90.transpose([2, 0, 1])
+                            img90w = np.rot90(img.transpose([3,1,2,0])).transpose([3,1,2,0]) # Rotate 90 deg width dimension
 
-                            # 180 degree rotation
-                            img180 = np.rot90(img, k=2)
-                            img180 = img180.transpose([2, 0, 1])
+                            img90d = np.rot90(img.transpose([2,1,3,0])).transpose([3,1,0,2]) # Rotate 90 deg depth dimension
 
-                            # 270 degree rotation
-                            img270 = np.rot90(img, k=3)
-                            img270 = img270.transpose([2, 0, 1])
+                            writeToHDF(np.ravel(img90h), dset, candidateValues[candidate_idx], valuesArray)
 
-                            # Flip left/right
-                            img1 = np.fliplr(np.squeeze(img[0,:,:]))
-                            img2 = np.fliplr(np.squeeze(img[1,:,:]))
-                            img3 = np.fliplr(np.squeeze(img[2,:,:]))
-                            imgFlip = np.array([img1, img2, img3])
+                            writeToHDF(np.ravel(img90w), dset, candidateValues[candidate_idx], valuesArray)
 
-                            # 90 degree rotation flipped
-                            img90Flip = np.rot90(imgFlip, k=1)
-                            img90Flip = img90.transpose([2, 0, 1])
+                            writeToHDF(np.ravel(img90d), dset, candidateValues[candidate_idx], valuesArray)
 
-                            writeToHDF(np.ravel(img90), dset, candidateValues[candidate_idx], valuesArray)
-
-                            writeToHDF(np.ravel(img180), dset, candidateValues[candidate_idx], valuesArray)
-
-                            writeToHDF(np.ravel(img270), dset, candidateValues[candidate_idx], valuesArray)
-
-                            writeToHDF(np.ravel(imgFlip), dset, candidateValues[candidate_idx], valuesArray)
-
-                            writeToHDF(np.ravel(img90Flip), dset, candidateValues[candidate_idx], valuesArray)
-
+                            
 
     print('Writing shape and output to HDF5 file.')
 
     # Output attribute 'lshape' to let neon know the shape of the tensor.
-    #df['input'].attrs['lshape'] = (1, window_height, window_width, window_depth) # (Channel, Height, Width, Depth)
-    df['input'].attrs['lshape'] = (num_channels, window_height*2, window_width*2) # (Channel, Height, Width, Depth)
+    #df['input'].attrs['lshape'] = (num_channels, window_height*2, window_width*2, window_depth*2) # (Channel, Height, Width, Depth)
+    
+    # There's only one channel so let's see if we can shove the 3rd dimension into the channels
+    # It won't be 3D convolution, but perhaps we'll get something out of it.
+    df['input'].attrs['lshape'] = (window_height*2, window_width*2, window_depth*2) # (Height, Width, Depth)
     
     
     # Output the labels
