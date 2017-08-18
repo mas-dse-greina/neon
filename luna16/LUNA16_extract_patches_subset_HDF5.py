@@ -54,7 +54,7 @@ cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
-window_depth = 32 # This is really the half depth so window will be double this depth
+window_depth = 2 # This is really the half depth so window will be double this depth
 num_channels = 1
 
 def find_bbox(center, origin,  
@@ -211,6 +211,7 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
     if (np.sum(pad_needed) == 0):
 
         # ROI volume tensor
+        # D x H x W
         img = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
                                         bbox[0][0]:bbox[0][1], 
                                         bbox[1][0]:bbox[1][1]])
@@ -260,12 +261,6 @@ def writeToHDF(img, dset, val, valuesArray):
 
     valuesArray.append(val)
 
-# "Sharpens" by just suppressing any pixels less than a certain value
-# Using for added data augmentation
-def sharpen(m):
-
-    m[m < 0.3] = 0
-    m = m / np.max(m)
 
 '''
 Main
@@ -298,7 +293,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 100
+                numNegatives = 30
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -324,21 +319,20 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                         elif (candidateValues[candidate_idx] == 0) & (numNegatives > 0):
 
                             # Flip a coin to determine if we keep this negative sample
-                            if (True): #(np.random.random_sample() > 0.5):
+                            if (np.random.random_sample() > 0.7):
                                 writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
 
-                                #numNegatives -= 1
+                                numNegatives -= 1
 
                         
                         elif (candidateValues[candidate_idx] == 1):
 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
 
-                            img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_width*2)
+                            #img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_depth*2)
+                            img = imgTensor.reshape(num_channels, window_depth*2, window_height*2, window_height*2)
 
-                            # Augment by sharpening
-                            writeToHDF(np.ravel(sharpen(img)), dset, candidateValues[candidate_idx], valuesArray)
-                            
+                        
                             imgFlipH = img[:,::-1,:,:] # Flip height dimension
                             imgFlipW = img[:,:,::-1,:] # Flip width dimension
                             imgFlipD = img[:,:,:,::-1] # Flip depth dimension
