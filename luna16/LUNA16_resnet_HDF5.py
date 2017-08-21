@@ -151,7 +151,7 @@ def create_network(stage_depth):
 
 lunaModel = create_network(args.depth)
 
-cost = GeneralizedCost(costfunc=CrossEntropyBinary())
+cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.0))
 
 modelFileName = 'LUNA16_resnetHDF.prm'
 # If model file exists, then load the it and start from there.

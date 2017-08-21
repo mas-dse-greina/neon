@@ -54,7 +54,7 @@ cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
-window_depth = 2 # This is really the half depth so window will be double this depth
+window_depth = 5 # This is really the half depth so window will be double this depth
 num_channels = 1
 
 def find_bbox(center, origin,  
@@ -249,10 +249,11 @@ firstTensor = True
 
 
 valuesArray = []
+posArray = []
 tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) # CxHxWxD
 
 
-def writeToHDF(img, dset, val, valuesArray):
+def writeToHDF(img, dset, val, valuesArray, posArray, worldCoords, fileName):
 
     # HDF5 allows us to dynamically resize the dataset
     row = dset.shape[0] # How many rows in the dataset currently?
@@ -261,6 +262,9 @@ def writeToHDF(img, dset, val, valuesArray):
 
     valuesArray.append(val)
 
+    subjectName = ntpath.splitext(ntpath.basename(fileName))[0]  # Strip off the .mhd extension
+
+    posArray.append([subjectName, worldCoords[0], worldCoords[1], worldCoords[2]])
 
 '''
 Main
@@ -308,26 +312,31 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                                                      maxshape=[None, tensorShape])
 
                             valuesArray.append(candidateValues[candidate_idx])
+                            posArray.append([file, worldCoords[candidate_idx, 0], worldCoords[candidate_idx,1],
+                                             worldCoords[candidate_idx,2]])
 
                             firstTensor = False
 
                         if not USE_AUGMENTATION:
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
 
                         elif (candidateValues[candidate_idx] == 0) & (numNegatives > 0):
 
                             # Flip a coin to determine if we keep this negative sample
                             if (np.random.random_sample() > 0.7):
-                                writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
+                                writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                    posArray, worldCoords[candidate_idx, :], file)
 
                                 numNegatives -= 1
 
                         
                         elif (candidateValues[candidate_idx] == 1):
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
                             #img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_depth*2)
                             img = imgTensor.reshape(num_channels, window_depth*2, window_height*2, window_height*2)
@@ -337,11 +346,14 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                             imgFlipW = img[:,:,::-1,:] # Flip width dimension
                             imgFlipD = img[:,:,:,::-1] # Flip depth dimension
 
-                            writeToHDF(np.ravel(imgFlipH), dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(np.ravel(imgFlipW), dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(np.ravel(imgFlipD), dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
 
                             # Augment positives by rotation 
@@ -351,11 +363,14 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
                             img90d = np.rot90(img.transpose([2,1,3,0])).transpose([3,1,0,2]) # Rotate 90 deg depth dimension
 
-                            writeToHDF(np.ravel(img90h), dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(np.ravel(img90w), dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(np.ravel(img90d), dset, candidateValues[candidate_idx], valuesArray)
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file)
 
                             
 
@@ -366,14 +381,18 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
     
     # There's only one channel so let's see if we can shove the 3rd dimension into the channels
     # It won't be 3D convolution, but perhaps we'll get something out of it.
-    df['input'].attrs['lshape'] = (window_height*2, window_width*2, window_depth*2) # (Height, Width, Depth)
+    #df['input'].attrs['lshape'] = (1, window_height*2, window_width*2, window_depth*2) # (Height, Width, Depth)
     
+    df['input'].attrs['lshape'] = (window_depth*2, window_height*2, window_width*2) # (Height, Width, Depth)
     
     # Output the labels
     valuesArray = np.array(valuesArray)
     df.create_dataset('output', data=valuesArray.reshape(-1,1))
     df['output'].attrs['nclass'] = 2
 
+    # Keep the positions in the HDF5 file
+    df.create_dataset('position', data=np.array(posArray))
+    
     num0 = len(np.where(valuesArray == 0)[0])
     num1 = len(np.where(valuesArray == 1)[0])
 
