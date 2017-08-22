@@ -297,7 +297,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 30
+                numNegatives = 50
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -308,14 +308,13 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
                         if (firstTensor): # For first value we need to create the dataset
 
-                            dset = df.create_dataset('input', data=imgTensor, 
-                                                     maxshape=[None, tensorShape])
-
+                            dset = df.create_dataset('input', data=imgTensor, maxshape=[None, tensorShape])
                             valuesArray.append(candidateValues[candidate_idx])
-                            posArray.append([file, worldCoords[candidate_idx, 0], worldCoords[candidate_idx,1],
+                            posArray.append([ntpath.splitext(ntpath.basename(file))[0], worldCoords[candidate_idx, 0], worldCoords[candidate_idx,1],
                                              worldCoords[candidate_idx,2]])
 
                             firstTensor = False
+                            continue   # Go back to the top
 
                         if not USE_AUGMENTATION:
 
@@ -327,6 +326,8 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
                             # Flip a coin to determine if we keep this negative sample
                             if (np.random.random_sample() > 0.7):
+
+
                                 writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
                                     posArray, worldCoords[candidate_idx, :], file)
 
@@ -346,13 +347,13 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                             imgFlipW = img[:,:,::-1,:] # Flip width dimension
                             imgFlipD = img[:,:,:,::-1] # Flip depth dimension
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            writeToHDF(imgFlipH, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            writeToHDF(imgFlipW, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            writeToHDF(imgFlipD, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
 
@@ -363,16 +364,15 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
                             img90d = np.rot90(img.transpose([2,1,3,0])).transpose([3,1,0,2]) # Rotate 90 deg depth dimension
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            writeToHDF(img90h, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            writeToHDF(img90w, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            writeToHDF(img90d, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            
 
     print('Writing shape and output to HDF5 file.')
 

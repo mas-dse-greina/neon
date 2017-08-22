@@ -17,7 +17,7 @@
 ResNet on LUNA16 data.
 
 Command:
-python LUNA16_resnet_HDF5.py -z 128 -e 200 -b gpu -i 0
+python LUNA16_resnet_HDF5.py -z 256 -e 35 -b gpu --subset=7
 
 
 
@@ -52,6 +52,7 @@ from neon.data import HDF5Iterator
 parser = NeonArgparser(__doc__)
 parser.add_argument('--depth', type=int, default=50,
                     help='choices 18, 34, 50, 101, 152')
+parser.add_argument('--subset', type=int, default=9)
 
 args = parser.parse_args()
 
@@ -70,8 +71,11 @@ print('Batch size = {}'.format(args.batch_size))
 be = gen_backend(**extract_valid_args(args, gen_backend))
 #be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
-train_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_except_subset9_augmented.h5')
-valid_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_subset9_augmented.h5')
+SUBSET = args.subset
+train_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_except_subset{}_augmented.h5'.format(SUBSET))
+valid_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(SUBSET))
+
+print('Using subset{}'.format(SUBSET))
 
 '''
 ResNet Model
@@ -151,14 +155,14 @@ def create_network(stage_depth):
 
 lunaModel = create_network(args.depth)
 
-cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.0))
+cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.9))
 
-modelFileName = 'LUNA16_resnetHDF.prm'
+modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # If model file exists, then load the it and start from there.
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
-weight_sched = Schedule([30, 60], 0.1)
+weight_sched = Schedule([15, 25], 0.1)
 opt = Adadelta() #GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
 
 # configure callbacks
@@ -173,7 +177,7 @@ callbacks.add_save_best_state_callback(modelFileName)
 
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-lunaModel.save_params(modelFileName)
+#lunaModel.save_params(modelFileName)
 
 # neon_logger.display('Calculating metrics on the test set. This could take a while...')
 # neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
