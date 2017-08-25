@@ -16,7 +16,7 @@
 """
 Load and test a pre-trained model against the entire data subset.
 
-python LUNA16_inferenceTesting_ResNet.py -b gpu -i 0 -z 128
+python LUNA16_inferenceTesting_ResNet_HDF.py -b gpu -z 512 --subset 8
 
 """
 
@@ -30,14 +30,18 @@ from neon.data.dataloader_transformers import TypeCast, OneHot
 import numpy as np
 import pandas as pd
 from neon.data import HDF5Iterator
+import h5py
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('--subset', type=int, default=9)
 args = parser.parse_args()
 
+subset = args.subset
+#testFileName = '/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(subset)
+testFileName = '/mnt/data/medical/luna16/luna16_roi_subset{}_ALL.h5'.format(subset)
 
-testFileName = '/mnt/data/medical/luna16/luna16_roi_subset9_augmented.h5'
-#testFileName = '/mnt/data/medical/luna16/luna16_roi_subset9_ALL.h5'
+print('Using test file: {}'.format(testFileName))
 
 # Next line gets rid of the deterministic warning
 args.deterministic = None
@@ -53,7 +57,7 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 # Set up the testset to load via aeon
 test_set = HDF5Iterator(testFileName)
 
-lunaModel = Model('LUNA16_resnetHDF.prm')
+lunaModel = Model('LUNA16_resnetHDF_subset{}.prm'.format(subset))
 
 def round(arr, threshold=0.5):
    '''
@@ -75,7 +79,8 @@ np.set_printoptions(precision=3, suppress=True)
 #print(prob)
 #print(' ')
 
-pred = round(prob, threshold=0.5).astype(int)
+threshold = 0.5
+pred = round(prob, threshold=threshold).astype(int)
 # print(pred),
 # print('predictions')
 # print(target),
@@ -103,8 +108,16 @@ if (True):
   # print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
   # print('Indices = {}'.format(np.where(pred != target)[0]))
   
-  from sklearn.metrics import classification_report, roc_auc_score
+  from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
+  from sklearn.metrics import precision_recall_curve, log_loss
 
+  precision, recall, thresholds = precision_recall_curve(target, prob)
+
+  print('Average precision = {}'.format(average_precision_score(target, prob, average='weighted')))
+
+  print('Log loss = {}'.format(log_loss(target, prob)))
+
+  print('For threshold of {}:'.format(threshold))
   print(classification_report(target, pred, target_names=['Class 0', 'Class 1']))
 
   print('Area under the curve = {}'.format(roc_auc_score(target, prob)))
@@ -116,4 +129,13 @@ if (True):
 
   # precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
   # neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
+
+  import pandas as pd
+
+  # Save the predictions file
+  df = h5py.File(testFileName)
+  out_df = pd.DataFrame(df['position'][()], columns=['filename','x','y','z'])
+  out_df['prob'] = prob
+  out_df.to_csv('predictions{}.csv'.format(subset), header=None, index=None)
+
 
