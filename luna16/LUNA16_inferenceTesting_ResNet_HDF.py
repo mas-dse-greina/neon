@@ -59,83 +59,37 @@ test_set = HDF5Iterator(testFileName)
 
 lunaModel = Model('LUNA16_resnetHDF_subset{}.prm'.format(subset))
 
-def round(arr, threshold=0.5):
-   '''
-       Round to an arbitrary threshold.
-       Above threshold goes to 1. Below goes 0.
-   '''
-   out = np.zeros(np.shape(arr))
-   out[np.where(arr > threshold)[0]] = 1
-
-   out[np.where(arr <= threshold)[0]] = 0
-
-   return out
-
 prob, target = lunaModel.get_outputs(test_set, return_targets=True) 
-prob = prob.T[0]
-target = target.T[0]
+
 np.set_printoptions(precision=3, suppress=True)
-#print(' ')
-#print(prob)
-#print(' ')
 
-threshold = 0.5
-pred = round(prob, threshold=threshold).astype(int)
-# print(pred),
-# print('predictions')
-# print(target),
-# print('targets')
 
-# print('Predict 1 count = {}'.format(len(np.where(pred == 1)[0])))
-# print('True 1 count= {}'.format(len(np.where(target == 1)[0])))
+from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
+from sklearn.metrics import precision_recall_curve, log_loss, confusion_matrix
 
-# print('Predict 0 count = {}'.format(len(np.where(pred == 0)[0])))
-# print('True 0 count= {}'.format(len(np.where(target == 0)[0])))
+# precision, recall, thresholds = precision_recall_curve(target, prob)
 
-# target_zero_idx = np.where(target == 0)[0]
-# target_one_idx = np.where(target == 1)[0]
+print('Average precision = {}'.format(average_precision_score(target, prob[:,1], average='weighted')))
 
-# false_positive = len(np.where(pred[target_zero_idx] == 1)[0])
-# false_negative = len(np.where(pred[target_one_idx] == 0)[0])
+print('Log loss = {}'.format(log_loss(target, prob[:,1])))
 
-# print('False positive count = {}'.format(false_positive))
-# print('False negative count = {}'.format(false_negative))
+print(classification_report(target, np.argmax(prob, axis=1), target_names=['Class 0', 'Class 1']))
 
-if (True):
+print('Area under the curve = {}'.format(roc_auc_score(target, prob[:,1])))
 
-  # print('All equal = {}'.format(np.array_equal(pred, target)))
+pred = np.argmax(prob, axis=1)
 
-  # print('Incorrect prediction probabilities = {}'.format(prob[np.where(pred != target)[0]]))
-  # print('Indices = {}'.format(np.where(pred != target)[0]))
-  
-  from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
-  from sklearn.metrics import precision_recall_curve, log_loss
+[[tn, fp], [fn, tp]] = confusion_matrix(target, pred, labels=[0, 1])
+print('True positives = {}, True negatives = {}, False positives = {}, False negatives = {}'.format(tp, tn, fp, fn))
 
-  precision, recall, thresholds = precision_recall_curve(target, prob)
+import pandas as pd
 
-  print('Average precision = {}'.format(average_precision_score(target, prob, average='weighted')))
-
-  print('Log loss = {}'.format(log_loss(target, prob)))
-
-  print('For threshold of {}:'.format(threshold))
-  print(classification_report(target, pred, target_names=['Class 0', 'Class 1']))
-
-  print('Area under the curve = {}'.format(roc_auc_score(target, prob)))
-
-  # neon_logger.display('Calculating metrics on the test set. This could take a while...')
-
-  # misclassification = lunaModel.eval(test_set, metric=Misclassification())
-  # neon_logger.display('Misclassification error (test) = {}'.format(misclassification))
-
-  # precision, recall = lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))
-  # neon_logger.display('Precision = {}, Recall = {}'.format(precision, recall))
-
-  import pandas as pd
-
-  # Save the predictions file
-  df = h5py.File(testFileName)
-  out_df = pd.DataFrame(df['position'][()], columns=['filename','x','y','z'])
-  out_df['prob'] = prob
-  out_df.to_csv('predictions{}.csv'.format(subset), header=None, index=None)
+# Save the predictions file
+df = h5py.File(testFileName)
+out_df = pd.DataFrame(df['position'][()], columns=['seriesuid','x','y','z'])
+out_df['prob'] = prob[:,1]
+#out_df['pred'] = pred
+#out_df['target'] = target
+out_df.to_csv('predictions{}.csv'.format(subset), index=None, header=None)
 
 

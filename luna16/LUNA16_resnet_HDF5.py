@@ -17,7 +17,7 @@
 ResNet on LUNA16 data.
 
 Command:
-python LUNA16_resnet_HDF5.py -z 256 -e 35 -b gpu --subset=7
+python LUNA16_resnet_HDF5.py -z 128  -b gpu --subset=7
 
 
 
@@ -27,7 +27,7 @@ from neon import logger as neon_logger
 
 from neon.optimizers import Adam, Adadelta
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
-from neon.transforms import Cost
+from neon.transforms import Cost, Softmax
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, LogLoss, Misclassification, PrecisionRecall
 from neon.models import Model
 from aeon import DataLoader
@@ -45,7 +45,7 @@ from neon.data.datasets import Dataset
 from neon.util.persist import load_obj
 import os
 
-from neon.data import HDF5Iterator
+from neon.data import HDF5IteratorOneHot
 
 
 # parse the command line arguments
@@ -72,8 +72,11 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 #be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
 SUBSET = args.subset
-train_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_except_subset{}_augmented.h5'.format(SUBSET))
-valid_set = HDF5Iterator('/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(SUBSET))
+train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_except_subset{}_augmented.h5'.format(SUBSET), \
+                                flip_enable=True, rot90_enable=True, crop_enable=False, border_size=5)
+# train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_except_subset{}_augmented.h5'.format(SUBSET), \
+#                                 flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
+valid_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(SUBSET))
 
 print('Using subset{}'.format(SUBSET))
 
@@ -150,12 +153,12 @@ def create_network(stage_depth):
     layers.append(Pooling('all', op='avg'))
     layers.append(Affine(10, init=Kaiming(local=False), 
                      batch_norm=True, activation=Rectlin()))
-    layers.append(Affine(1, init=Kaiming(local=False), activation=Logistic()))
+    layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
     return Model(layers=layers)
 
 lunaModel = create_network(args.depth)
 
-cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.9))
+cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.5))
 
 modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # If model file exists, then load the it and start from there.
@@ -163,7 +166,7 @@ modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 #   lunaModel = Model(modelFileName)
 
 weight_sched = Schedule([15, 25], 0.1)
-opt = Adadelta() #GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
+opt = Adadelta(decay=0.95, epsilon=1e-6) #GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:

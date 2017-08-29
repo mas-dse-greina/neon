@@ -50,7 +50,8 @@ args = parser.parse_args()
 DATA_DIR = '/mnt/data/medical/luna16/'
 EXCLUDE_DIR = args.exclude # include all directories except the subset one; otherwise just include the subset
 SUBSET = args.subset
-cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+#cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+cand_path = 'CSVFILES/candidates.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
@@ -297,7 +298,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 50
+                numNegatives = 200
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -314,6 +315,10 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                                              worldCoords[candidate_idx,2]])
 
                             firstTensor = False
+
+                            if (candidateValues[candidate_idx] == 0):
+                                numNegatives -= 1
+
                             continue   # Go back to the top
 
                         if not USE_AUGMENTATION:
@@ -325,13 +330,13 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                         elif (candidateValues[candidate_idx] == 0) & (numNegatives > 0):
 
                             # Flip a coin to determine if we keep this negative sample
-                            if (np.random.random_sample() > 0.7):
+                            if True: #(np.random.random_sample() > 0.5):
 
 
                                 writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
                                     posArray, worldCoords[candidate_idx, :], file)
 
-                                numNegatives -= 1
+                                #numNegatives -= 1
 
                         
                         elif (candidateValues[candidate_idx] == 1):
@@ -339,39 +344,39 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            #img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_depth*2)
-                            img = imgTensor.reshape(num_channels, window_depth*2, window_height*2, window_height*2)
+                            # #img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_depth*2)
+                            # img = imgTensor.reshape(num_channels, window_depth*2, window_height*2, window_height*2)
 
                         
-                            imgFlipH = img[:,::-1,:,:] # Flip height dimension
-                            imgFlipW = img[:,:,::-1,:] # Flip width dimension
-                            imgFlipD = img[:,:,:,::-1] # Flip depth dimension
+                            # imgFlipH = img[:,::-1,:,:] # Flip height dimension
+                            # imgFlipW = img[:,:,::-1,:] # Flip width dimension
+                            # imgFlipD = img[:,:,:,::-1] # Flip depth dimension
 
-                            writeToHDF(imgFlipH, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                            # writeToHDF(imgFlipH, dset, candidateValues[candidate_idx], valuesArray,
+                            #     posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(imgFlipW, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                            # writeToHDF(imgFlipW, dset, candidateValues[candidate_idx], valuesArray,
+                            #     posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(imgFlipD, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                            # writeToHDF(imgFlipD, dset, candidateValues[candidate_idx], valuesArray,
+                            #     posArray, worldCoords[candidate_idx, :], file)
 
 
-                            # Augment positives by rotation 
-                            img90h = np.rot90(img.transpose([1,2,3,0])).transpose([3,0,1,2]) # Rotate 90 deg height dimension
+                            # # Augment positives by rotation 
+                            # img90h = np.rot90(img.transpose([1,2,3,0])).transpose([3,0,1,2]) # Rotate 90 deg height dimension
 
-                            img90w = np.rot90(img.transpose([3,1,2,0])).transpose([3,1,2,0]) # Rotate 90 deg width dimension
+                            # img90w = np.rot90(img.transpose([3,1,2,0])).transpose([3,1,2,0]) # Rotate 90 deg width dimension
 
-                            img90d = np.rot90(img.transpose([2,1,3,0])).transpose([3,1,0,2]) # Rotate 90 deg depth dimension
+                            # img90d = np.rot90(img.transpose([2,1,3,0])).transpose([3,1,0,2]) # Rotate 90 deg depth dimension
 
-                            writeToHDF(img90h, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                            # writeToHDF(img90h, dset, candidateValues[candidate_idx], valuesArray,
+                            #     posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(img90w, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                            # writeToHDF(img90w, dset, candidateValues[candidate_idx], valuesArray,
+                            #     posArray, worldCoords[candidate_idx, :], file)
 
-                            writeToHDF(img90d, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                            # writeToHDF(img90d, dset, candidateValues[candidate_idx], valuesArray,
+                            #     posArray, worldCoords[candidate_idx, :], file)
 
 
     print('Writing shape and output to HDF5 file.')
@@ -396,9 +401,6 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
     num0 = len(np.where(valuesArray == 0)[0])
     num1 = len(np.where(valuesArray == 1)[0])
 
-    print('# class 0 = {}, # class 1 = {}, total = {}'.format(num0, num1, len(valuesArray)))
-
-
-            
+    print('# class 0 = {}, # class 1 = {}, total = {}, ratio = {:.2f}'.format(num0, num1, len(valuesArray), float(num0)/num1))
             
                 
