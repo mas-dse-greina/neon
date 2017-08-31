@@ -55,8 +55,9 @@ cand_path = 'CSVFILES/candidates.csv'  # Candidates file tells us the centers of
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
-window_depth = 5 # This is really the half depth so window will be double this depth
+window_depth = 16 # This is really the half depth so window will be double this depth
 num_channels = 1
+border_size = 5  # Do a random crop with this border size (if augmentation is turned on)
 
 def find_bbox(center, origin,  
               mask_width, mask_height, mask_depth,
@@ -228,6 +229,29 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
 
     return imgTensor   
 
+def img_crop(img, border_size=5):
+        '''
+        Takes a random crop of the tensor
+
+        `img` is the tensor
+        '''
+        if (border_size <= 0):  # No cropping needed
+            return img
+
+        shape = img.shape
+            
+        # Crop larger than smallest image dimension
+        assert (border_size < np.min(shape[1:])//2), 'Border size ({}) larger than image'.format(border_size)
+        
+        # Choose random place to crop border in each dimension
+        crop = np.random.randint(0, border_size, size=len(shape)-1)
+        
+        for dim in range(len(crop)):
+            # Take just the cropped indices from this axis
+            img = img[:].take(range(border_size + crop[dim], shape[dim+1] - border_size + crop[dim]), dim+1)
+        
+        return img
+
 
 """
 Loop through all .mhd files within the data directory and process them.
@@ -251,15 +275,21 @@ firstTensor = True
 
 valuesArray = []
 posArray = []
-tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) # CxHxWxD
+
+if not USE_AUGMENTATION:
+    tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) # CxHxWxD
+    border_size = 0
+else:
+    tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) - 2*border_size # CxHxWxD
 
 
-def writeToHDF(img, dset, val, valuesArray, posArray, worldCoords, fileName):
+def writeToHDF(img, dset, val, valuesArray, posArray, worldCoords, fileName, border_size=0):
 
     # HDF5 allows us to dynamically resize the dataset
     row = dset.shape[0] # How many rows in the dataset currently?
     dset.resize(row+1, axis=0)   # Add one more row (i.e. new ROI)
-    dset[row, :] = imgTensor  # Append the new row to the dataset
+
+    dset[row, :] = img_crop(imgTensor, border_size)  # Append the new row to the dataset
 
     valuesArray.append(val)
 
@@ -298,7 +328,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 200
+                numNegatives = 100
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -309,7 +339,9 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
                         if (firstTensor): # For first value we need to create the dataset
 
-                            dset = df.create_dataset('input', data=imgTensor, maxshape=[None, tensorShape])
+                            a = img_crop(imgTensor, border_size) 
+
+                            dset = df.create_dataset('input', data=img_crop(imgTensor, border_size), maxshape=[None, tensorShape])
                             valuesArray.append(candidateValues[candidate_idx])
                             posArray.append([ntpath.splitext(ntpath.basename(file))[0], worldCoords[candidate_idx, 0], worldCoords[candidate_idx,1],
                                              worldCoords[candidate_idx,2]])
@@ -324,25 +356,37 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                         if not USE_AUGMENTATION:
 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                                posArray, worldCoords[candidate_idx, :], file, border_size=0)
 
 
                         elif (candidateValues[candidate_idx] == 0) & (numNegatives > 0):
 
                             # Flip a coin to determine if we keep this negative sample
-                            if True: #(np.random.random_sample() > 0.5):
+                            if (np.random.random_sample() > 0.7):
 
 
                                 writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
-                                    posArray, worldCoords[candidate_idx, :], file)
+                                    posArray, worldCoords[candidate_idx, :], file, border_size)
 
-                                #numNegatives -= 1
+                                numNegatives -= 1
 
                         
                         elif (candidateValues[candidate_idx] == 1):
 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                                posArray, worldCoords[candidate_idx, :], file, border_size)
+
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file, border_size)
+
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file, border_size)
+
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file, border_size)
+
+                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                                posArray, worldCoords[candidate_idx, :], file, border_size)
 
                             # #img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_depth*2)
                             # img = imgTensor.reshape(num_channels, window_depth*2, window_height*2, window_height*2)

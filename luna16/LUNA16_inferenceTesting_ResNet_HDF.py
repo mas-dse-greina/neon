@@ -57,7 +57,9 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 # Set up the testset to load via aeon
 test_set = HDF5Iterator(testFileName)
 
-lunaModel = Model('LUNA16_resnetHDF_subset{}.prm'.format(subset))
+#lunaModel = Model('LUNA16_resnetHDF_subset{}.prm'.format(subset))
+
+lunaModel = Model('LUNA16_resnetHDF_subset9.prm')
 
 prob, target = lunaModel.get_outputs(test_set, return_targets=True) 
 

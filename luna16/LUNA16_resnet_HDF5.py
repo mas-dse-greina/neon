@@ -17,9 +17,7 @@
 ResNet on LUNA16 data.
 
 Command:
-python LUNA16_resnet_HDF5.py -z 128  -b gpu --subset=7
-
-
+python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 3 -e 25 --subset 9
 
 """
 import itertools as itt
@@ -151,7 +149,7 @@ def create_network(stage_depth):
         layers.append(module_factory(nfm, bottleneck, stride))
 
     layers.append(Pooling('all', op='avg'))
-    layers.append(Affine(10, init=Kaiming(local=False), 
+    layers.append(Affine(1000, init=Kaiming(local=False), 
                      batch_norm=True, activation=Rectlin()))
     layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
     return Model(layers=layers)
@@ -165,8 +163,9 @@ modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
-weight_sched = Schedule([15, 25], 0.1)
-opt = Adadelta(decay=0.95, epsilon=1e-6) #GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
+weight_sched = Schedule([5, 8], 0.1)
+#opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
+opt = Adadelta(decay=0.95, epsilon=1e-6) 
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:
