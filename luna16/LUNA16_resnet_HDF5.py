@@ -16,8 +16,10 @@
 """
 ResNet on LUNA16 data.
 
+Depth parameter can be 18, 34, 50, 101, or 152
+
 Command:
-python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 3 -e 25 --subset 9
+python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 3 -e 25 --depth 50 --subset 9
 
 """
 import itertools as itt
@@ -149,7 +151,7 @@ def create_network(stage_depth):
         layers.append(module_factory(nfm, bottleneck, stride))
 
     layers.append(Pooling('all', op='avg'))
-    layers.append(Affine(1000, init=Kaiming(local=False), 
+    layers.append(Affine(100, init=Kaiming(local=False), 
                      batch_norm=True, activation=Rectlin()))
     layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
     return Model(layers=layers)
@@ -159,9 +161,6 @@ lunaModel = create_network(args.depth)
 cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.5))
 
 modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
-# If model file exists, then load the it and start from there.
-# if (os.path.isfile(modelFileName)):
-#   lunaModel = Model(modelFileName)
 
 weight_sched = Schedule([5, 8], 0.1)
 #opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
