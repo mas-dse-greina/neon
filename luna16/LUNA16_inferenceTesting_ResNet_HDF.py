@@ -57,7 +57,18 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 # Set up the testset to load via aeon
 test_set = HDF5Iterator(testFileName)
 
-lunaModel = Model('LUNA16_resnetHDF_subset{}.prm'.format(subset))
+model_filename= 'LUNA16_resnetHDF_subset{}.prm'.format(subset)
+
+# if (subset <= 5):
+# 	model_filename = 'LUNA16_resnetHDF_subset0.prm'
+# else:
+# 	model_filename = 'LUNA16_resnetHDF_subset9.prm'
+
+#model_filename = 'LUNA16_resnet_subset9_GOODENOUGH.prm'
+
+print('Using model: {}'.format(model_filename))
+
+lunaModel = Model(model_filename)
 
 prob, target = lunaModel.get_outputs(test_set, return_targets=True) 
 
@@ -71,7 +82,6 @@ from sklearn.metrics import precision_recall_curve, log_loss, confusion_matrix
 
 print('Average precision = {}'.format(average_precision_score(target, prob[:,1], average='weighted')))
 
-print('Log loss = {}'.format(log_loss(target, prob[:,1])))
 
 print(classification_report(target, np.argmax(prob, axis=1), target_names=['Class 0', 'Class 1']))
 
