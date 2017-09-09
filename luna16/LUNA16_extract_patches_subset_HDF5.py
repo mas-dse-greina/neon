@@ -49,8 +49,11 @@ args = parser.parse_args()
 DATA_DIR = '/mnt/data/medical/luna16/'
 EXCLUDE_DIR = args.exclude # include all directories except the subset one; otherwise just include the subset
 SUBSET = 'subset{}'.format(args.subset)
-#cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
-cand_path = 'CSVFILES/candidates.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+
+if EXCLUDE_DIR:
+    cand_path = 'CSVFILES/candidates.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+else:
+    cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height

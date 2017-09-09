@@ -75,16 +75,7 @@ SUBSET = args.subset
 train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_except_subset{}_augmented.h5'.format(SUBSET), \
                                  flip_enable=True, rot90_enable=True, crop_enable=False, border_size=5)
 
-# train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_all_subsets_subset{}_augmented.h5'.format(SUBSET), \
-#                                 flip_enable=True, rot90_enable=True, crop_enable=False, border_size=5)
 
-# train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_subset9_augmented.h5', \
-#                                 flip_enable=True, rot90_enable=True, crop_enable=False, border_size=5)
-
-
-
-# train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_except_subset{}_augmented.h5'.format(SUBSET), \
-#                                 flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
 valid_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(SUBSET), \
                                 flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
 
@@ -171,10 +162,9 @@ def create_network(stage_depth):
     for nfm, stride in zip(nfms, strides):
         layers.append(module_factory(nfm, bottleneck, stride))
 
-    #layers.append(Pooling('all', op='avg'))
-    # layers.append(Conv(**conv_params(1, 1000, relu=True))) 
-    # layers.append(Conv(**conv_params(1, 2, relu=False))) 
     layers.append(Pooling('all', op='avg'))
+    # layers.append(Conv(**conv_params(1, 10, relu=True))) 
+    # layers.append(Conv(**conv_params(1, 2, relu=False))) 
     layers.append(Affine(10, init=Kaiming(local=False), 
                      batch_norm=True, activation=Rectlin()))
     layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
@@ -188,8 +178,8 @@ cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.5))
 modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 
 # If model file exists, then load the it and start from there.
-if (os.path.isfile(modelFileName)):
-  lunaModel = Model(modelFileName)
+# if (os.path.isfile(modelFileName)):
+#   lunaModel = Model(modelFileName)
 
 
 weight_sched = Schedule([5, 8], 0.1)
@@ -207,12 +197,5 @@ callbacks.add_save_best_state_callback(modelFileName)
 
 
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
-
-#lunaModel.save_params(modelFileName)
-
-# neon_logger.display('Calculating metrics on the test set. This could take a while...')
-# neon_logger.display('Misclassification error (test) = {:.2f}%'.format(lunaModel.eval(test_set, metric=Misclassification())[0] * 100))
-
-# neon_logger.display('Precision/recall (test) = {}'.format(lunaModel.eval(test_set, metric=PrecisionRecall(num_classes=2))))
 
 
