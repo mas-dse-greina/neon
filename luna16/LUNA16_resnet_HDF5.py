@@ -19,7 +19,7 @@ ResNet on LUNA16 data.
 Depth parameter can be 18, 34, 50, 101, or 152
 
 Command:
-python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 0 --depth 50 -e 40 --subset 9 
+python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 0 --depth 50 -e 50 --subset 9 
 
 """
 import itertools as itt
@@ -163,11 +163,12 @@ def create_network(stage_depth):
         layers.append(module_factory(nfm, bottleneck, stride))
 
     layers.append(Pooling('all', op='avg'))
-    # layers.append(Conv(**conv_params(1, 10, relu=True))) 
-    # layers.append(Conv(**conv_params(1, 2, relu=False))) 
-    layers.append(Affine(10, init=Kaiming(local=False), 
-                     batch_norm=True, activation=Rectlin()))
-    layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
+    layers.append(Conv(**conv_params(1, 1000, relu=True))) 
+    layers.append(Conv(**conv_params(1, 2, relu=False))) 
+    layers.append(Activation(Softmax()))
+    # layers.append(Affine(10, init=Kaiming(local=False), 
+    #                  batch_norm=True, activation=Rectlin()))
+    # layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
 
     return Model(layers=layers)
 

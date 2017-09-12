@@ -23,12 +23,12 @@ import numpy as np
 import pandas as pd
 import os
 import ntpath
-from neon.util.argparser import NeonArgparser
+import argparse
 import h5py
 
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
+parser = argparse.ArgumentParser(description='Process LUNA16 lung CT scans for model.')
 
 parser.add_argument('--subset', default=0,
                     help='LUNA16 subset directory to process')
@@ -50,10 +50,12 @@ DATA_DIR = '/mnt/data/medical/luna16/'
 EXCLUDE_DIR = args.exclude # include all directories except the subset one; otherwise just include the subset
 SUBSET = 'subset{}'.format(args.subset)
 
-if EXCLUDE_DIR:
-    cand_path = 'CSVFILES/candidates.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
-else:
-    cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+# if EXCLUDE_DIR:
+#     cand_path = 'CSVFILES/candidates.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+# else:
+#     cand_path = 'CSVFILES/candidates_V2.csv'  # Candidates file tells us the centers of the ROI for candidate nodules
+
+cand_path = 'CSVFILES/candidates_V2.csv'
 
 window_width = 32 # This is really the half width so window will be double this width
 window_height = 32 # This is really the half height so window will be double this height
@@ -82,7 +84,7 @@ def find_bbox(center, origin,
 
     left = x - mask_width
     if left <= 0:
-        pad_left = -left + 1
+        pad_left = -left
         left = 0
     else:
         pad_left = 0
@@ -96,7 +98,7 @@ def find_bbox(center, origin,
 
     down = y - mask_height
     if down <= 0:
-        pad_down = -down + 1
+        pad_down = -down 
         down = 0
     else:
         pad_down = 0
@@ -110,7 +112,7 @@ def find_bbox(center, origin,
     
     bottom = z - mask_depth
     if bottom <= 0:
-        pad_bottom = -bottom + 1
+        pad_bottom = -bottom 
         bottom = 0
     else:
         pad_bottom = 0
@@ -210,6 +212,7 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
     bbox, pad_needed = find_bbox(center, origin, window_width, window_height, window_depth,
                               slice_z, height, width)
         
+    img = []
     if (np.sum(pad_needed) == 0):
 
         # ROI volume tensor
@@ -217,6 +220,46 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
         img = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
                                         bbox[0][0]:bbox[0][1], 
                                         bbox[1][0]:bbox[1][1]])
+
+
+        # # img.append(normalizePlanes(img_array[voxel_center[2]-1, 
+        # #                                 bbox[0][0]:bbox[0][1], 
+        # #                                 bbox[1][0]:bbox[1][1]]))
+
+        # img.append(normalizePlanes(img_array[voxel_center[2], 
+        #                                 bbox[0][0]:bbox[0][1], 
+        #                                 bbox[1][0]:bbox[1][1]]))
+
+        # # img.append(normalizePlanes(img_array[voxel_center[2]+1, 
+        # #                                 bbox[0][0]:bbox[0][1], 
+        # #                                 bbox[1][0]:bbox[1][1]]))
+
+        # # img.append(normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+        # #                                 voxel_center[1]-1, 
+        # #                                 bbox[1][0]:bbox[1][1]]))
+
+        # img.append(normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+        #                                 voxel_center[1], 
+        #                                 bbox[1][0]:bbox[1][1]]))
+
+        # # img.append(normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+        # #                                 voxel_center[1]+1, 
+        # #                                 bbox[1][0]:bbox[1][1]]))
+
+        # # img.append(normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+        # #                                 bbox[0][0]:bbox[0][1], 
+        # #                                 voxel_center[0] - 1]))
+
+        # img.append(normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+        #                                 bbox[0][0]:bbox[0][1], 
+        #                                 voxel_center[0]]))
+        
+        # # img.append(normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
+        # #                                 bbox[0][0]:bbox[0][1], 
+        # #                                 voxel_center[0] + 1]))
+
+        # img = np.array(img)
+
         
         #img = img.transpose([1, 2, 0])  # Height, Width, Depth
 
@@ -224,8 +267,22 @@ def extract_tensor(img_array, worldCoords, origin, spacing):
         imgTensor = img.ravel().reshape(1,-1)
 
 
-    else:
-        imgTensor = None
+    else:  # Pad zeros (black for missing rows)
+
+        # Question: Do we need all black or should we fill with gaussian noise?
+
+        img = np.zeros((window_depth*2, window_height*2, window_width*2))
+
+        img1 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+
+        # Put the image in the center of the padded frame
+        img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
+            pad_needed[0][0]:(window_width*2 - pad_needed[0][1]), 
+            pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img1
+
+        img = normalizePlanes(img)
+
+        imgTensor = img.ravel().reshape(1,-1)
 
     return imgTensor   
 
@@ -252,7 +309,7 @@ firstTensor = True
 
 valuesArray = []
 posArray = []
-tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) # CxHxWxD
+tensorShape = num_channels*(window_height*2)*(window_width*2) *(window_depth*2) # CxHxWxD
 
 
 def writeToHDF(img, dset, val, valuesArray, posArray, worldCoords, fileName):
@@ -284,7 +341,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
         for file in files:
             
             if (file.endswith('.mhd')) & ('__MACOSX' not in root):  # Don't get the Macintosh directory
-                
+
                 img_file = os.path.join(root, file)
                 print(img_file)
 
@@ -299,7 +356,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                 # SimpleITK keeps the origin and spacing information for the 3D image volume
                 img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
             
-                numNegatives = 50
+                numNegatives = 100
 
                 for candidate_idx in range(candidateValues.shape[0]): # Iterate through all candidates
 
@@ -345,39 +402,6 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
                             writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
                                 posArray, worldCoords[candidate_idx, :], file)
 
-                            # #img = imgTensor.reshape(num_channels, window_height*2, window_width*2, window_depth*2)
-                            # img = imgTensor.reshape(num_channels, window_depth*2, window_height*2, window_height*2)
-
-                        
-                            # imgFlipH = img[:,::-1,:,:] # Flip height dimension
-                            # imgFlipW = img[:,:,::-1,:] # Flip width dimension
-                            # imgFlipD = img[:,:,:,::-1] # Flip depth dimension
-
-                            # writeToHDF(imgFlipH, dset, candidateValues[candidate_idx], valuesArray,
-                            #     posArray, worldCoords[candidate_idx, :], file)
-
-                            # writeToHDF(imgFlipW, dset, candidateValues[candidate_idx], valuesArray,
-                            #     posArray, worldCoords[candidate_idx, :], file)
-
-                            # writeToHDF(imgFlipD, dset, candidateValues[candidate_idx], valuesArray,
-                            #     posArray, worldCoords[candidate_idx, :], file)
-
-
-                            # # Augment positives by rotation 
-                            # img90h = np.rot90(img.transpose([1,2,3,0])).transpose([3,0,1,2]) # Rotate 90 deg height dimension
-
-                            # img90w = np.rot90(img.transpose([3,1,2,0])).transpose([3,1,2,0]) # Rotate 90 deg width dimension
-
-                            # img90d = np.rot90(img.transpose([2,1,3,0])).transpose([3,1,0,2]) # Rotate 90 deg depth dimension
-
-                            # writeToHDF(img90h, dset, candidateValues[candidate_idx], valuesArray,
-                            #     posArray, worldCoords[candidate_idx, :], file)
-
-                            # writeToHDF(img90w, dset, candidateValues[candidate_idx], valuesArray,
-                            #     posArray, worldCoords[candidate_idx, :], file)
-
-                            # writeToHDF(img90d, dset, candidateValues[candidate_idx], valuesArray,
-                            #     posArray, worldCoords[candidate_idx, :], file)
 
 
     print('Writing shape and output to HDF5 file.')
@@ -389,6 +413,8 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
     # It won't be 3D convolution, but perhaps we'll get something out of it.
     #df['input'].attrs['lshape'] = (1, window_height*2, window_width*2, window_depth*2) # (Height, Width, Depth)
     
+    #df['input'].attrs['lshape'] = (num_channels, window_height*2, window_width*2) # (Height, Width, Depth)
+
     df['input'].attrs['lshape'] = (window_depth*2, window_height*2, window_width*2) # (Height, Width, Depth)
     
     # Output the labels

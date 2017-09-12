@@ -1,17 +1,17 @@
 #!/bin/bash
 
 
-# python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 0
-# python LUNA16_extract_patches_subset_HDF5.py --augment --subset 0
-# python LUNA16_extract_patches_subset_HDF5.py --subset 0
+python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 0
+python LUNA16_extract_patches_subset_HDF5.py --augment --subset 0
+python LUNA16_extract_patches_subset_HDF5.py --subset 0
 
-# python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 1
-# python LUNA16_extract_patches_subset_HDF5.py --augment --subset 1
-# python LUNA16_extract_patches_subset_HDF5.py --subset 1
+python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 1
+python LUNA16_extract_patches_subset_HDF5.py --augment --subset 1
+python LUNA16_extract_patches_subset_HDF5.py --subset 1
 
-# python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 2
-# python LUNA16_extract_patches_subset_HDF5.py --augment --subset 2
-# python LUNA16_extract_patches_subset_HDF5.py --subset 2
+python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 2
+python LUNA16_extract_patches_subset_HDF5.py --augment --subset 2
+python LUNA16_extract_patches_subset_HDF5.py --subset 2
 
 python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 3
 python LUNA16_extract_patches_subset_HDF5.py --augment --subset 3
@@ -37,7 +37,7 @@ python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 8
 python LUNA16_extract_patches_subset_HDF5.py --augment --subset 8
 python LUNA16_extract_patches_subset_HDF5.py --subset 8
 
-# python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 9
-# python LUNA16_extract_patches_subset_HDF5.py --augment --subset 9
-# python LUNA16_extract_patches_subset_HDF5.py --subset 9
+python LUNA16_extract_patches_subset_HDF5.py --exclude --augment --subset 9
+python LUNA16_extract_patches_subset_HDF5.py --augment --subset 9
+python LUNA16_extract_patches_subset_HDF5.py --subset 9
 
