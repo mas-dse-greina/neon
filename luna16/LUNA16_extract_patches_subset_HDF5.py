@@ -58,12 +58,12 @@ USE_AUGMENTATION = args.augment
 
 cand_path = 'CSVFILES/candidates_V2.csv'
 
-window_width = 64 # This is really the half width so window will be double this width
-window_height = 64 # This is really the half height so window will be double this height
-window_depth = 20 # This is really the half depth so window will be double this depth
+window_width = 32 # This is really the half width so window will be double this width
+window_height = 32 # This is really the half height so window will be double this height
+window_depth = 10 # This is really the half depth so window will be double this depth
 num_channels = 1
 
-border_size = 10
+border_size = 5
 
 def find_bbox(center,  
               mask_width, mask_height, mask_depth,
