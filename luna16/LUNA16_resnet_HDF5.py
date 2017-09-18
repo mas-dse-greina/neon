@@ -164,6 +164,7 @@ def create_network(stage_depth):
 
     layers.append(Pooling('all', op='avg'))
     layers.append(Conv(**conv_params(1, 1000, relu=True))) 
+    layers.append(Dropout(0.5))
     layers.append(Conv(**conv_params(1, 2, relu=False))) 
     layers.append(Activation(Softmax()))
     # layers.append(Affine(10, init=Kaiming(local=False), 
@@ -174,7 +175,24 @@ def create_network(stage_depth):
 
 lunaModel = create_network(args.depth)
 
-cost = GeneralizedCost(costfunc=CrossEntropyBinary(weight=0.5))
+# Pre-trained ResNet 50 
+trained_resnet = load_obj('resnet50_weights.prm')  # Load a pre-trained resnet 50 model
+
+# Load the pre-trained weights to our model
+param_layers = [l for l in lunaModel.layers.layers]
+param_dict_list = trained_resnet['model']['config']['layers']
+# i = 0
+# for layer, params in zip(param_layers, param_dict_list):
+
+#     if (i > 4):
+#         break
+
+#     print(layer.name + ", " + params['config']['name'])
+#     layer.load_weights(params, load_states=True)
+#     i += 1
+
+
+cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
 modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 
