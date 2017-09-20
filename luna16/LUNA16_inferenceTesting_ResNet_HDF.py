@@ -54,8 +54,10 @@ print('Batch size = {}'.format(args.batch_size))
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-#test_set = HDF5Iterator(testFileName)
-test_set = HDF5IteratorOneHot(testFileName, flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
+# We don't need to one hot encode this since it is only 2 classes 
+# and the sklearn stuff is just looking at the probability of class 1
+test_set = HDF5Iterator(testFileName)
+#test_set = HDF5IteratorOneHot(testFileName)
 
 
 model_filename= 'LUNA16_resnetHDF_subset{}.prm'.format(subset)
@@ -72,6 +74,7 @@ print('Using model: {}'.format(model_filename))
 lunaModel = Model(model_filename)
 
 prob, target = lunaModel.get_outputs(test_set, return_targets=True) 
+
 
 np.set_printoptions(precision=3, suppress=True)
 

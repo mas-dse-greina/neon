@@ -162,35 +162,38 @@ def create_network(stage_depth):
     for nfm, stride in zip(nfms, strides):
         layers.append(module_factory(nfm, bottleneck, stride))
 
-    layers.append(Pooling('all', op='avg'))
-    layers.append(Conv(**conv_params(1, 1000, relu=True))) 
-    layers.append(Dropout(0.5))
-    layers.append(Conv(**conv_params(1, 2, relu=False))) 
-    layers.append(Activation(Softmax()))
-    # layers.append(Affine(10, init=Kaiming(local=False), 
-    #                  batch_norm=True, activation=Rectlin()))
-    # layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
+    layers.append(Pooling('all', op='avg', name="custom_head"))
+    # layers.append(Conv(**conv_params(1, 1000, relu=True))) 
+    # layers.append(Dropout(0.5))
+    # layers.append(Conv(**conv_params(1, 2, relu=False))) 
+    # layers.append(Activation(Softmax()))
+    layers.append(Affine(512, init=Kaiming(local=False), 
+                     batch_norm=True, activation=Rectlin()))
+    layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
 
     return Model(layers=layers)
 
 lunaModel = create_network(args.depth)
 
 # Pre-trained ResNet 50 
-trained_resnet = load_obj('resnet50_weights.prm')  # Load a pre-trained resnet 50 model
+pretrained_weights_file = 'resnet50_weights.prm'
+print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
+trained_resnet = load_obj(pretrained_weights_file)  # Load a pre-trained resnet 50 model
 
 # Load the pre-trained weights to our model
 param_layers = [l for l in lunaModel.layers.layers]
 param_dict_list = trained_resnet['model']['config']['layers']
-# i = 0
-# for layer, params in zip(param_layers, param_dict_list):
+i = 0
+for layer, params in zip(param_layers, param_dict_list):
 
-#     if (i > 4):
-#         break
+    if (layer.name == 'custom_head'):
+        break
 
-#     print(layer.name + ", " + params['config']['name'])
-#     layer.load_weights(params, load_states=True)
-#     i += 1
+    layer.load_weights(params, load_states=False)  # Don't load the state
+    i += 1
 
+del trained_resnet
+print('Pre-trained weights loaded.')
 
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
@@ -200,10 +203,14 @@ modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
+optPretrained = GradientDescentMomentum(0.001, 0.8, wdecay=0.0001) # Set a slow learning rate for ResNet layers
+optHead = Adadelta(decay=0.95, epsilon=1e-6) 
 
-weight_sched = Schedule([5, 8], 0.1)
-#opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
-opt = Adadelta(decay=0.95, epsilon=1e-6) 
+mapping = {'default': optPretrained, # default optimizer applied to the pretrained sections
+           'Affine': optHead} # all layers from the Affine class
+
+# use multiple optimizers
+opt = MultiOptimizer(mapping)
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:

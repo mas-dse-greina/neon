@@ -78,25 +78,25 @@ valid_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_subset{}_aug
 
 print('Using subset{}'.format(SUBSET))
 
+init_uni = Kaiming()
+
 relu = Rectlin()
 bn = True
-convp1 = dict(init=Kaiming(), batch_norm=bn, activation=relu, padding=1)
+convp1 = dict(init=init_uni, batch_norm=bn, activation=relu, padding=1)
 
 layers = [Conv((5, 5, 24), **convp1),
           Pooling(2, op='max'),
           Conv((3, 3, 32), **convp1),
           Pooling(2, op='max'),
           Conv((3, 3, 48), **convp1),
-          #Dropout(keep=.6),
-          Pooling(2, op='max'),
-
-          Affine(nout=512, init=Kaiming(), activation=relu),
-          #Dropout(keep=.4),
-          Affine(nout=2, init=Kaiming(), activation=Softmax())]
+          Pooling('all', op='avg'), 
+          Affine(512, init=init_uni, batch_norm=True, activation=relu),
+          Affine(2, init=init_uni, activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
 lunaModel = Model(layers=layers)
+
 
 
 modelFileName = 'LUNA16_CADIMI_subset{}.prm'.format(SUBSET)

@@ -424,7 +424,7 @@ def downsample_negatives(candidateValues):
     idx_neg = np.where(np.array(candidateValues) == 0)[0]
 
     # Take a random permutation of negatives
-    NUM_NEGATIVES_TO_KEEP = np.min([2000, len(idx_neg)]) # Number of negatives to take
+    NUM_NEGATIVES_TO_KEEP = np.min([200, len(idx_neg)]) # Number of negatives to take
     candidate_array = np.random.permutation(idx_neg)[:NUM_NEGATIVES_TO_KEEP]
 
     # Append all of the positives
