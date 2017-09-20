@@ -203,7 +203,7 @@ modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
-optPretrained = GradientDescentMomentum(0.001, 0.8, wdecay=0.0001) # Set a slow learning rate for ResNet layers
+optPretrained = GradientDescentMomentum(0.01, 0.9, wdecay=0.001) # Set a slow learning rate for ResNet layers
 optHead = Adadelta(decay=0.95, epsilon=1e-6) 
 
 mapping = {'default': optPretrained, # default optimizer applied to the pretrained sections

@@ -61,6 +61,7 @@ test_set = HDF5Iterator(testFileName)
 
 
 model_filename= 'LUNA16_resnetHDF_subset{}.prm'.format(subset)
+#model_filename= 'LUNA16_resnetHDF_subset0.prm'
 
 # if (subset <= 5):
 # 	model_filename = 'LUNA16_resnetHDF_subset0.prm'
