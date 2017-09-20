@@ -28,7 +28,7 @@ from neon.backends import gen_backend
 from neon.data.dataloader_transformers import TypeCast, OneHot
 import numpy as np
 import pandas as pd
-from neon.data import HDF5Iterator
+from neon.data import HDF5IteratorOneHot
 import h5py
 
 # parse the command line arguments
@@ -53,17 +53,9 @@ print('Batch size = {}'.format(args.batch_size))
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-# Set up the testset to load via aeon
-test_set = HDF5Iterator(testFileName)
+test_set = HDF5IteratorOneHot(testFileName, flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
 
 model_filename= 'LUNA16_CADIMI_subset{}.prm'.format(subset)
-
-# if (subset <= 5):
-# 	model_filename = 'LUNA16_resnetHDF_subset0.prm'
-# else:
-# 	model_filename = 'LUNA16_resnetHDF_subset9.prm'
-
-#model_filename = 'LUNA16_resnet_subset9_GOODENOUGH.prm'
 
 print('Using model: {}'.format(model_filename))
 

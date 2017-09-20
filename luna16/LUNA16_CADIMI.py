@@ -25,6 +25,7 @@ https://luna16.grand-challenge.org/serve/public_html/pdfs/CADIMI-TEAM1_160816.pd
 import itertools as itt
 from neon import logger as neon_logger
 
+from neon.optimizers import Adam, Adadelta
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Cost, Softmax
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
@@ -79,7 +80,7 @@ print('Using subset{}'.format(SUBSET))
 
 relu = Rectlin()
 bn = True
-convp1 = dict(init=Kaiming(local=True), batch_norm=bn, activation=relu, padding=1)
+convp1 = dict(init=Kaiming(), batch_norm=bn, activation=relu, padding=1)
 
 layers = [Conv((5, 5, 24), **convp1),
           Pooling(2, op='max'),
@@ -104,8 +105,9 @@ modelFileName = 'LUNA16_CADIMI_subset{}.prm'.format(SUBSET)
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
-# Nesterov accel- erated gradient descent with a learning rate of 0.01, a decay of 10^-3 and a momentum of 0.9
-opt = GradientDescentMomentum(0.01, 0.9, wdecay=0.001, nesterov=True)
+# Nesterov accelerated gradient descent with a learning rate of 0.01, a decay of 10^-3 and a momentum of 0.9
+#opt = GradientDescentMomentum(0.01, 0.9, wdecay=0.001, nesterov=True)
+opt = Adadelta(decay=0.95, epsilon=1e-6) 
 
 # configure callbacks
 if args.callback_args['eval_freq'] is None:
