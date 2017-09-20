@@ -29,7 +29,7 @@ from neon.backends import gen_backend
 from neon.data.dataloader_transformers import TypeCast, OneHot
 import numpy as np
 import pandas as pd
-from neon.data import HDF5IteratorOneHot
+from neon.data import HDF5IteratorOneHot, HDF5Iterator
 import h5py
 
 # parse the command line arguments
