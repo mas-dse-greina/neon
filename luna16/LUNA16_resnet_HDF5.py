@@ -148,7 +148,7 @@ def create_network(stage_depth):
     if stage_depth in (50, 101, 152):
         bottleneck = True
 
-    layers = [Conv(**conv_params(7, 64, strides=2)),
+    layers = [Conv(name='Input Layer', **conv_params(7, 64, strides=2)),
               Pooling(3, strides=2)]
 
     # Structure of the deep residual part of the network:
@@ -162,7 +162,7 @@ def create_network(stage_depth):
     for nfm, stride in zip(nfms, strides):
         layers.append(module_factory(nfm, bottleneck, stride))
 
-    layers.append(Pooling('all', op='avg', name="custom_head"))
+    layers.append(Pooling('all', op='avg', name='end_resnet'))
     # layers.append(Conv(**conv_params(1, 1000, relu=True))) 
     # layers.append(Dropout(0.5))
     # layers.append(Conv(**conv_params(1, 2, relu=False))) 
@@ -175,25 +175,30 @@ def create_network(stage_depth):
 
 lunaModel = create_network(args.depth)
 
-# # Pre-trained ResNet 50 
-# pretrained_weights_file = 'resnet50_weights.prm'
-# print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
-# trained_resnet = load_obj(pretrained_weights_file)  # Load a pre-trained resnet 50 model
+PRETRAINED = False
+# Pre-trained ResNet 50 
+# It assumes the image has a depth channel of 3
+pretrained_weights_file = 'resnet50_weights.prm'
+print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
+trained_resnet = load_obj(pretrained_weights_file)  # Load a pre-trained resnet 50 model
 
-# # Load the pre-trained weights to our model
-# param_layers = [l for l in lunaModel.layers.layers]
-# param_dict_list = trained_resnet['model']['config']['layers']
-# i = 0
-# for layer, params in zip(param_layers, param_dict_list):
+# Load the pre-trained weights to our model
+param_layers = [l for l in lunaModel.layers.layers]
+param_dict_list = trained_resnet['model']['config']['layers']
 
-#     if (layer.name == 'custom_head'):
-#         break
+for layer, params in zip(param_layers, param_dict_list):
 
-#     layer.load_weights(params, load_states=False)  # Don't load the state
-#     i += 1
+    if (layer.name == 'end_resnet'):
+        break
 
-# del trained_resnet
-# print('Pre-trained weights loaded.')
+    # ResNet is trained on images that have 3 color depth channels
+    # Our data usually isn't 3 color channels so we should not load the weights for that layer
+    if (layer.name != 'Input Layer'):
+        layer.load_weights(params, load_states=False)  # Don't load the state
+
+del trained_resnet
+PRETRAINED = True
+print('Pre-trained weights loaded.')
 
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
@@ -203,10 +208,15 @@ modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
-optPretrained = GradientDescentMomentum(0.01, 0.9, wdecay=0.001) # Set a slow learning rate for ResNet layers
 optHead = Adadelta(decay=0.95, epsilon=1e-6) 
+if PRETRAINED:
+    optPretrained = GradientDescentMomentum(0.01, 0.9, wdecay=0.001) # Set a slow learning rate for ResNet layers
+else:
+    optPretrained = optHead
+
 
 mapping = {'default': optPretrained, # default optimizer applied to the pretrained sections
+           'Input Layer' : optHead, # The layer named 'Input Layer'
            'Affine': optHead} # all layers from the Affine class
 
 # use multiple optimizers
