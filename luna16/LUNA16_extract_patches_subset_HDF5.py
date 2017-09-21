@@ -58,12 +58,14 @@ USE_AUGMENTATION = args.augment
 
 cand_path = 'CSVFILES/candidates_V2.csv'
 
-window_width = 40 # This is really the half width so window will be double this width
-window_height = 40 # This is really the half height so window will be double this height
-window_depth = 10 # This is really the half depth so window will be double this depth
+window_width = 30 # This is really the half width so window will be double this width
+window_height = 30 # This is really the half height so window will be double this height
+window_depth = 5 # This is really the half depth so window will be double this depth
 num_channels = 1
 
-border_size = 10
+pixel_spacing = [.75, .75, .75]  # mm per pixel/voxel
+
+border_size = 5
 if not USE_AUGMENTATION:
     border_size = 0
 
@@ -149,7 +151,7 @@ def normalize_img(img):
     new_size = [new_x_size, new_y_size, new_z_size]
 
 #     new_spacing = [old_sz*old_spc/new_sz  for old_sz, old_spc, new_sz in zip(img.GetSize(), img.GetSpacing(), new_size)]
-    new_spacing = [.5, .5, .5]  # mm per voxel (x,y,z) (h, w, d)
+    new_spacing = pixel_spacing  # mm per voxel (x,y,z) (h, w, d)
 
     new_size = np.rint(np.array(new_size) / np.array(new_spacing)).astype(int)
 
