@@ -25,10 +25,9 @@ python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 0 --depth 50 -e 50 --subset 9
 import itertools as itt
 from neon import logger as neon_logger
 
-from neon.optimizers import Adam, Adadelta
-from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
+from neon.optimizers import Adam, Schedule, MultiOptimizer
 from neon.transforms import Cost, Softmax
-from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, LogLoss, Misclassification, PrecisionRecall
+from neon.transforms import Rectlin, CrossEntropyBinary
 from neon.models import Model
 from aeon import DataLoader
 from neon.callbacks.callbacks import Callbacks, MetricCallback
@@ -37,11 +36,10 @@ from neon.backends import gen_backend
 from neon.data.dataloader_transformers import TypeCast
 import numpy as np
 
-from neon.initializers import Kaiming, IdentityInit, Constant
+from neon.initializers import Kaiming
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Activation, Dropout
 from neon.layers import MergeSum, SkipNode, BatchNorm
 
-from neon.data.datasets import Dataset
 from neon.util.persist import load_obj
 import os
 
@@ -208,9 +206,9 @@ modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
-optHead = Adadelta(decay=0.95, epsilon=1e-6) 
+optHead = Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999)
 if PRETRAINED:
-    optPretrained = GradientDescentMomentum(0.01, 0.9, wdecay=0.001) # Set a slow learning rate for ResNet layers
+    optPretrained = Adam(learning_rate=0.0003, beta_1=0.9, beta_2=0.999) # Set a slow learning rate for ResNet layers
 else:
     optPretrained = optHead
 
