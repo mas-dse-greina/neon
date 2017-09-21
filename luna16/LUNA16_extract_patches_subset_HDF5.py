@@ -58,12 +58,15 @@ USE_AUGMENTATION = args.augment
 
 cand_path = 'CSVFILES/candidates_V2.csv'
 
-window_width = 30 # This is really the half width so window will be double this width
-window_height = 30 # This is really the half height so window will be double this height
-window_depth = 30 # This is really the half depth so window will be double this depth
-num_channels = 3
+window_width = 40 # This is really the half width so window will be double this width
+window_height = 40 # This is really the half height so window will be double this height
+window_depth = 10 # This is really the half depth so window will be double this depth
+num_channels = 1
 
-border_size = 4
+border_size = 10
+if not USE_AUGMENTATION:
+    border_size = 0
+
 
 def find_bbox(center,  
               mask_width, mask_height, mask_depth,
@@ -214,11 +217,11 @@ def extract_candidates(img_file):
     dfFileCandidates = dfCandidates[dfCandidates['seriesuid']==subjectName].copy(deep=True)
 
     numCandidates = dfFileCandidates.shape[0]
-    print('Subject {}: There are {} candidate nodules in this file.'.format(subjectName, numCandidates))
+    #print('Subject {}: There are {} candidate nodules in this file.'.format(subjectName, numCandidates))
 
     numNonNodules = sum(dfFileCandidates['class'] == 0)
     numNodules = sum(dfFileCandidates['class'] == 1)
-    print('{} are true nodules (class 1) and {} are non-nodules (class 0)'.format(numNodules, numNonNodules))
+    #print('{} are true nodules (class 1) and {} are non-nodules (class 0)'.format(numNodules, numNonNodules))
 
 
     '''
@@ -230,7 +233,7 @@ def extract_candidates(img_file):
 
         # Make 5 copies of the true nodules and add them to the dataframe
         dfTrue = dfFileCandidates[dfFileCandidates['class'] == 1]
-        num_copies = 10
+        num_copies = 5
         dfFileCandidates = dfFileCandidates.append([dfTrue]*num_copies, ignore_index=True)
 
         # Now randomly shuffle the dataframe in place
@@ -272,98 +275,90 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
 
         # ROI volume tensor
         # D x H x W
-        # img = normalizePlanes(img_array[bbox[2][0]:bbox[2][1], 
-        #                                 bbox[0][0]:bbox[0][1], 
-        #                                 bbox[1][0]:bbox[1][1]])
+        img = img_array[bbox[2][0]:bbox[2][1], 
+                        bbox[0][0]:bbox[0][1], 
+                        bbox[1][0]:bbox[1][1]]
 
-        '''
-        CODE FOR CADIMI BEGIN - 3 orthogonal slices in channel depth
-        '''
-        img = []
+        # '''
+        # CODE FOR CADIMI BEGIN - 3 orthogonal slices in channel depth
+        # '''
+        # img = []
 
-        img1 = img_array[voxel_center[2], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
-        img1 = img1.reshape(1, window_height*2, window_width*2)
-        img.append(normalizePlanes(img_crop(img1, border_size)))
+        # img1 = img_array[voxel_center[2], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+        # img1 = img1.reshape(1, window_height*2, window_width*2)
+        # img.append(img1)
 
-        img2 = img_array[bbox[2][0]:bbox[2][1], voxel_center[1], bbox[1][0]:bbox[1][1]]
-        img2 = img2.reshape(1, window_height*2, window_width*2)
-        img.append(normalizePlanes(img_crop(img2, border_size)))
+        # img2 = img_array[bbox[2][0]:bbox[2][1], voxel_center[1], bbox[1][0]:bbox[1][1]]
+        # img2 = img2.reshape(1, window_height*2, window_width*2)
+        # img.append(img2)
 
-        img3 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], voxel_center[0]]
-        img3 = img3.reshape(1, window_height*2, window_width*2)
-        img.append(normalizePlanes(img_crop(img3, border_size)))
+        # img3 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], voxel_center[0]]
+        # img3 = img3.reshape(1, window_height*2, window_width*2)
+        # img.append(img3)
 
-        img = np.array(img)
+        # img = np.array(img)
         
-        '''
-        CODE FOR CADIMI END - 3 orthogonal slices in channel depth
-        '''
-
-        # Then we need to flatten the array to a single vector (1, C*H*W*D)
-        imgTensor = img.ravel().reshape(1,-1)
-
+        # '''
+        # CODE FOR CADIMI END - 3 orthogonal slices in channel depth
+        # '''
 
     else:  # Pad zeros (black for missing rows)
 
         # Question: Do we need all black or should we fill with gaussian noise?
 
-        # img = np.zeros((window_depth*2, window_height*2, window_width*2))
+        img = np.zeros((window_depth*2, window_height*2, window_width*2))
 
-        # img1 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+        img1 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
 
-        # # Put the image in the center of the padded frame
-        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
-        #     pad_needed[0][0]:(window_width*2 - pad_needed[0][1]), 
-        #     pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img1
+        # Put the image in the center of the padded frame
+        img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
+            pad_needed[0][0]:(window_width*2 - pad_needed[0][1]), 
+            pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img1
 
-        # img = img_crop(img, border_size)
-        # img = normalizePlanes(img)
+        # '''
+        # CODE FOR CADIMI BEGIN - 3 orthogonal slices in channel depth
+        # '''
 
-        # imgTensor = img.ravel().reshape(1,-1)
+        # img_all = []
 
-        '''
-        CODE FOR CADIMI BEGIN - 3 orthogonal slices in channel depth
-        '''
+        # img = np.zeros((window_height*2, window_width*2))
 
-        img_all = []
+        # img1 = img_array[voxel_center[2], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
 
-        img = np.zeros((window_height*2, window_width*2))
+        # img[pad_needed[0][0]:(window_width*2 - pad_needed[0][1]), \
+        #         pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img1
 
-        img1 = img_array[voxel_center[2], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+        # img = img.reshape(1, window_height*2, window_width*2)
+        # img_all.append(img)
 
-        img[pad_needed[0][0]:(window_width*2 - pad_needed[0][1]), \
-                pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img1
-
-        img = img.reshape(1, window_height*2, window_width*2)
-        img_all.append(normalizePlanes(img_crop(img, border_size)))
-
-        img = np.zeros((window_height*2, window_width*2))
-        img2 = img_array[bbox[2][0]:bbox[2][1], voxel_center[1], bbox[1][0]:bbox[1][1]]
+        # img = np.zeros((window_height*2, window_width*2))
+        # img2 = img_array[bbox[2][0]:bbox[2][1], voxel_center[1], bbox[1][0]:bbox[1][1]]
        
-        img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
-            pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img2
+        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
+        #     pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img2
 
-        img = img.reshape(1, window_height*2, window_width*2)
-        img_all.append(normalizePlanes(img_crop(img, border_size)))
+        # img = img.reshape(1, window_height*2, window_width*2)
+        # img_all.append(img)
 
-        img = np.zeros((window_height*2, window_width*2))
-        img3 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], voxel_center[0]]
+        # img = np.zeros((window_height*2, window_width*2))
+        # img3 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], voxel_center[0]]
 
-        img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
-            pad_needed[0][0]:(window_width*2 - pad_needed[0][1])] = img3
-        img = img.reshape(1, window_height*2, window_width*2)
+        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
+        #     pad_needed[0][0]:(window_width*2 - pad_needed[0][1])] = img3
+        # img = img.reshape(1, window_height*2, window_width*2)
 
-        img_all.append(normalizePlanes(img_crop(img, border_size)))
+        # img_all.append(img)
 
-        img_all = np.array(img_all)
+        # img = np.array(img_all)
 
-        # Then we need to flatten the array to a single vector (1, C*H*W*D)
-        imgTensor = img_all.ravel().reshape(1,-1)
-        
-        '''
-        CODE FOR CADIMI END - 3 orthogonal slices in channel depth
-        '''
+        # '''
+        # CODE FOR CADIMI END - 3 orthogonal slices in channel depth
+        # '''
+  
+    img = img_crop(img, border_size)
+    img = normalizePlanes(img)
 
+    imgTensor = img.ravel().reshape(1,-1)
 
     return imgTensor   
 
@@ -391,16 +386,6 @@ firstTensor = True
 valuesArray = []
 posArray = []
 
-
-if not USE_AUGMENTATION:
-    tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) # CxHxWxD
-    tensorShape = num_channels*(window_height*2)*(window_width*2)
-    border_size = 0
-else:
-    tensorShape = num_channels*(window_height*2)*(window_width*2)*(window_depth*2) - 2*border_size # CxHxWxD
-    tensorShape = num_channels*(window_height*2)*(window_width*2) - 2*border_size
-
-
 def writeToHDF(img, dset, val, valuesArray, posArray, worldCoords, fileName):
 
     # HDF5 allows us to dynamically resize the dataset
@@ -424,7 +409,7 @@ def downsample_negatives(candidateValues):
     idx_neg = np.where(np.array(candidateValues) == 0)[0]
 
     # Take a random permutation of negatives
-    NUM_NEGATIVES_TO_KEEP = np.min([200, len(idx_neg)]) # Number of negatives to take
+    NUM_NEGATIVES_TO_KEEP = np.min([100, len(idx_neg)]) # Number of negatives to take
     candidate_array = np.random.permutation(idx_neg)[:NUM_NEGATIVES_TO_KEEP]
 
     # Append all of the positives
@@ -439,69 +424,79 @@ def downsample_negatives(candidateValues):
 '''
 Main
 '''
+from tqdm import tqdm, trange # Get progress bar
 
 positives_on_border = 0 # Number of positives that are too close to the border to get a ROI
 
 with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM dataset
+
+    if EXCLUDE_DIR:
+        print('Taking all ROIs except the ones from directory {}'.format(SUBSET))
+
+    if USE_AUGMENTATION:
+        print('Augmentation of positive class is turned ON.')
 
     for root, dirs, files in os.walk(DATA_DIR_DESCEND, topdown=True):
 
         # If EXCLUDE_DIR true, then include all directories except SUBSET
         # Otherwise, exclude all directories except SUBSET
         if EXCLUDE_DIR:
-            dirs[:] = [d for d in dirs if d not in SUBSET]  # Exclude the subset
+            dirs[:] = [d for d in dirs if (d not in SUBSET) & ('subset' in d)]  # Exclude the subset
 
-        for file in files:
+        # Just get the files that end with .mhd
+        files[:] = [f for f in files if f.endswith('.mhd')]
+
+        print('Extracting ROI from files in this directory: {}'.format(root))
+
+        for file in tqdm(files):
             
-            if (file.endswith('.mhd')) & ('__MACOSX' not in root):  # Don't get the Macintosh directory
+            img_file = os.path.join(root, file)
+            #print(img_file)
 
-                img_file = os.path.join(root, file)
-                print(img_file)
+            candidateValues, worldCoords = extract_candidates(img_file)
 
-                candidateValues, worldCoords = extract_candidates(img_file)
+            # Load the CT scan (3D .mhd file)
+            itk_img = sitk.ReadImage(img_file)  # indices are x,y,z (note the ordering of dimesions)
 
-                # Load the CT scan (3D .mhd file)
-                itk_img = sitk.ReadImage(img_file)  # indices are x,y,z (note the ordering of dimesions)
+            # Normalize the image spacing so that a voxel is 1x1x1 mm in dimension
+            itk_img = normalize_img(itk_img)
 
-                # Normalize the image spacing so that a voxel is 1x1x1 mm in dimension
-                itk_img = normalize_img(itk_img)
+            # SimpleITK keeps the origin and spacing information for the 3D image volume
+            img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
 
-                # SimpleITK keeps the origin and spacing information for the 3D image volume
-                img_array = sitk.GetArrayFromImage(itk_img) # indices are z,y,x (note the ordering of dimensions)
+            if (USE_AUGMENTATION):
 
-                if (USE_AUGMENTATION):
+                candidate_array = downsample_negatives(candidateValues)
 
-                    candidate_array = downsample_negatives(candidateValues)
+            else:
 
-                else:
+                candidate_array = range(candidateValues.shape[0])
 
-                    candidate_array = range(candidateValues.shape[0])
+            for candidate_idx in candidate_array: # Iterate through all candidates
 
-                for candidate_idx in candidate_array: # Iterate through all candidates
+                imgTensor = extract_tensor(img_array, worldCoords[candidate_idx, :], 
+                                           np.array(itk_img.GetOrigin()), np.array(itk_img.GetSpacing()), border_size)
 
-                    imgTensor = extract_tensor(img_array, worldCoords[candidate_idx, :], 
-                                               np.array(itk_img.GetOrigin()), np.array(itk_img.GetSpacing()), border_size)
+                if (imgTensor is not None):
 
-                    if (imgTensor is not None):
+                    if (firstTensor): # For first value we need to create the dataset
 
-                        if (firstTensor): # For first value we need to create the dataset
+                        dset = df.create_dataset('input', data=imgTensor, maxshape=[None, imgTensor.shape[1]])
+                        valuesArray.append(candidateValues[candidate_idx])
+                        posArray.append([ntpath.splitext(ntpath.basename(file))[0], worldCoords[candidate_idx, 0], worldCoords[candidate_idx,1],
+                                         worldCoords[candidate_idx,2]])
 
-                            dset = df.create_dataset('input', data=imgTensor, maxshape=[None, tensorShape])
-                            valuesArray.append(candidateValues[candidate_idx])
-                            posArray.append([ntpath.splitext(ntpath.basename(file))[0], worldCoords[candidate_idx, 0], worldCoords[candidate_idx,1],
-                                             worldCoords[candidate_idx,2]])
-
-                            firstTensor = False
-
-                        else:
-
-                            writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
-                                posArray, worldCoords[candidate_idx, :], file)
+                        firstTensor = False
 
                     else:
-                        print('No tensor. ROI out of range. Label = {}'.format(candidateValues[candidate_idx]))
-                        if (candidateValues[candidate_idx] == 1):
-                            positives_on_border += 1
+
+                        writeToHDF(imgTensor, dset, candidateValues[candidate_idx], valuesArray,
+                            posArray, worldCoords[candidate_idx, :], file)
+
+                else:
+                    print('No tensor. ROI out of range. Label = {}'.format(candidateValues[candidate_idx]))
+                    if (candidateValues[candidate_idx] == 1):
+                        positives_on_border += 1
 
     print('Writing shape and output to HDF5 file.')
 
@@ -512,9 +507,9 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
     # It won't be 3D convolution, but perhaps we'll get something out of it.
     #df['input'].attrs['lshape'] = (1, window_height*2, window_width*2, window_depth*2) # (Height, Width, Depth)
     
-    df['input'].attrs['lshape'] = (num_channels, (window_height -border_size)*2, (window_width-border_size)*2) # (Height, Width, Depth)
+    #df['input'].attrs['lshape'] = (num_channels, (window_height -border_size)*2, (window_width-border_size)*2) # (Height, Width, Depth)
 
-    #df['input'].attrs['lshape'] = (window_depth*2, (window_height - border_size)*2, (window_width - border_size)*2) # (Height, Width, Depth)
+    df['input'].attrs['lshape'] = (window_depth*2, (window_height - border_size)*2, (window_width - border_size)*2) # (Height, Width, Depth)
 
     
     # Output the labels

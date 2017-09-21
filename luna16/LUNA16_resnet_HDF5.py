@@ -175,25 +175,25 @@ def create_network(stage_depth):
 
 lunaModel = create_network(args.depth)
 
-# Pre-trained ResNet 50 
-pretrained_weights_file = 'resnet50_weights.prm'
-print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
-trained_resnet = load_obj(pretrained_weights_file)  # Load a pre-trained resnet 50 model
+# # Pre-trained ResNet 50 
+# pretrained_weights_file = 'resnet50_weights.prm'
+# print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
+# trained_resnet = load_obj(pretrained_weights_file)  # Load a pre-trained resnet 50 model
 
-# Load the pre-trained weights to our model
-param_layers = [l for l in lunaModel.layers.layers]
-param_dict_list = trained_resnet['model']['config']['layers']
-i = 0
-for layer, params in zip(param_layers, param_dict_list):
+# # Load the pre-trained weights to our model
+# param_layers = [l for l in lunaModel.layers.layers]
+# param_dict_list = trained_resnet['model']['config']['layers']
+# i = 0
+# for layer, params in zip(param_layers, param_dict_list):
 
-    if (layer.name == 'custom_head'):
-        break
+#     if (layer.name == 'custom_head'):
+#         break
 
-    layer.load_weights(params, load_states=False)  # Don't load the state
-    i += 1
+#     layer.load_weights(params, load_states=False)  # Don't load the state
+#     i += 1
 
-del trained_resnet
-print('Pre-trained weights loaded.')
+# del trained_resnet
+# print('Pre-trained weights loaded.')
 
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
