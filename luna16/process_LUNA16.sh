@@ -16,8 +16,8 @@ python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 1 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 0
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 1
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 0
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 1
 
 wait # Wait for the process above to stop
 
@@ -44,9 +44,9 @@ python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 4 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 2
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 3
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 4
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 2
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 3
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 4
 
 wait # Wait for the process above to stop
 
@@ -73,9 +73,9 @@ python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 7 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 5
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 6
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 7
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 5
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 6
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 7
 
 wait # Wait for the process above to stop
 
@@ -97,8 +97,8 @@ python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 9 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 8
-python LUNA16_inferenceTesting_ResNet_HDF.py -z 1024 -i 0 -b gpu --subset 9
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 8
+python LUNA16_inferenceTesting_ResNet_HDF.py -z 256 -i 0 -b gpu --subset 9
 
 wait # Wait for the process above to stop
 
