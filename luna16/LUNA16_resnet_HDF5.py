@@ -19,31 +19,34 @@ ResNet on LUNA16 data.
 Depth parameter can be 18, 34, 50, 101, or 152
 
 Command:
-python LUNA16_resnet_HDF5.py -z 1024 -b gpu -i 0 --depth 50 -e 50 --subset 9 
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 -e 40 --depth 50 --subset 0
+
+NOTE: A batch size of 256 seems to work the best. Larger batch sizes train too slowly.
+If you opt for larger batch size, then you might need to increase the learning rate.
 
 """
 import itertools as itt
 from neon import logger as neon_logger
 
-from neon.optimizers import Adam, Schedule, MultiOptimizer
-from neon.transforms import Cost, Softmax
-from neon.transforms import Rectlin, CrossEntropyBinary
-from neon.models import Model
-from aeon import DataLoader
 from neon.callbacks.callbacks import Callbacks, MetricCallback
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.backends import gen_backend
-from neon.data.dataloader_transformers import TypeCast
-import numpy as np
+
+from neon.optimizers import Adam, Schedule, MultiOptimizer, RMSProp
+from neon.transforms import Cost, Softmax
+from neon.transforms import Rectlin, CrossEntropyBinary
+from neon.models import Model
 
 from neon.initializers import Kaiming
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Activation, Dropout
 from neon.layers import MergeSum, SkipNode, BatchNorm
 
-from neon.util.persist import load_obj
-import os
-
 from neon.data import HDF5IteratorOneHot
+
+from neon.util.persist import load_obj
+
+import os
+import numpy as np
 
 
 # parse the command line arguments
@@ -76,6 +79,9 @@ train_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_except_subse
 
 valid_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(SUBSET), \
                                 flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
+
+# valid_set = HDF5IteratorOneHot('/mnt/data/medical/luna16/luna16_roi_subset{}_ALL.h5'.format(SUBSET), \
+#                                 flip_enable=False, rot90_enable=False, crop_enable=False, border_size=5)
 
 print('Using subset{}'.format(SUBSET))
 
@@ -161,13 +167,13 @@ def create_network(stage_depth):
         layers.append(module_factory(nfm, bottleneck, stride))
 
     layers.append(Pooling('all', op='avg', name='end_resnet'))
-    # layers.append(Conv(**conv_params(1, 1000, relu=True))) 
-    # layers.append(Dropout(0.5))
-    # layers.append(Conv(**conv_params(1, 2, relu=False))) 
-    # layers.append(Activation(Softmax()))
-    layers.append(Affine(512, init=Kaiming(local=False), 
-                     batch_norm=True, activation=Rectlin()))
-    layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
+    layers.append(Conv(name = 'Custom Head 1', **conv_params(1, 1000, relu=True))) 
+    layers.append(Dropout(0.5))
+    layers.append(Conv(name = 'Custom Head 2', **conv_params(1, 2, relu=False))) 
+    layers.append(Activation(Softmax()))
+    # layers.append(Affine(512, init=Kaiming(local=False), 
+    #                  batch_norm=True, activation=Rectlin()))
+    # layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
 
     return Model(layers=layers)
 
@@ -176,7 +182,7 @@ lunaModel = create_network(args.depth)
 PRETRAINED = False
 # Pre-trained ResNet 50 
 # It assumes the image has a depth channel of 3
-pretrained_weights_file = 'resnet50_weights.prm'
+pretrained_weights_file = 'resnet{}_weights.prm'.format(args.depth)
 print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
 trained_resnet = load_obj(pretrained_weights_file)  # Load a pre-trained resnet 50 model
 
@@ -192,7 +198,7 @@ for layer, params in zip(param_layers, param_dict_list):
     # ResNet is trained on images that have 3 color depth channels
     # Our data usually isn't 3 color channels so we should not load the weights for that layer
     if (layer.name != 'Input Layer'):
-        layer.load_weights(params, load_states=False)  # Don't load the state
+        layer.load_weights(params, load_states=False)  # Don't load the state, just load the weights
 
 del trained_resnet
 PRETRAINED = True
@@ -202,11 +208,13 @@ cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
 modelFileName = 'LUNA16_resnetHDF_subset{}.prm'.format(SUBSET)
 
-# If model file exists, then load the it and start from there.
+# #If model file exists, then load the it and start from there.
 # if (os.path.isfile(modelFileName)):
 #   lunaModel = Model(modelFileName)
 
 optHead = Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999)
+
+
 if PRETRAINED:
     optPretrained = Adam(learning_rate=0.0003, beta_1=0.9, beta_2=0.999) # Set a slow learning rate for ResNet layers
 else:
@@ -215,6 +223,8 @@ else:
 
 mapping = {'default': optPretrained, # default optimizer applied to the pretrained sections
            'Input Layer' : optHead, # The layer named 'Input Layer'
+           'Custom Head 1' : optHead,
+           'Custom Head 2' : optHead,
            'Affine': optHead} # all layers from the Affine class
 
 # use multiple optimizers

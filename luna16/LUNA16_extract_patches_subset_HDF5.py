@@ -58,8 +58,8 @@ USE_AUGMENTATION = args.augment
 
 cand_path = 'CSVFILES/candidates_V2.csv'
 
-window_width = 30 # This is really the half width so window will be double this width
-window_height = 30 # This is really the half height so window will be double this height
+window_width = 40 # This is really the half width so window will be double this width
+window_height = 40 # This is really the half height so window will be double this height
 window_depth = 5 # This is really the half depth so window will be double this depth
 num_channels = 1
 
@@ -69,6 +69,9 @@ border_size = 5
 if not USE_AUGMENTATION:
     border_size = 0
 
+print('Patch size will be {} mm x {} mm.'.format(
+     (window_height-border_size)*2*pixel_spacing[1], 
+     (window_width-border_size)*2*pixel_spacing[0]))
 
 def find_bbox(center,  
               mask_width, mask_height, mask_depth,
@@ -174,7 +177,7 @@ Then we normalize pixel values between 0 and 1.
 def normalizePlanes(npzarray):
      
     if USE_AUGMENTATION:
-        maxHU = np.random.randint(400, 2000) # This helps give data augmentation by changing the contrast randomly
+        maxHU = np.random.randint(1000, 2000) # This helps give data augmentation by changing the contrast randomly
     else:
         maxHU = 2000.
     minHU = -1000.

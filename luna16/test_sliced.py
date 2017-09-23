@@ -3,8 +3,17 @@
 import matplotlib.pyplot as plt
 import h5py
 import numpy as np 
+import sys
 
-df = h5py.File('/mnt/data/medical/luna16/luna16_roi_subset1_augmented.h5')
+fileName = '/mnt/data/medical/luna16/luna16_roi_subset0_augmented.h5'
+
+print('Using filename: {}'.format(fileName))
+
+try: 
+	df = h5py.File(fileName)
+except:
+	print('I can''t find the file: {}'.format(fileName))
+	sys.exit(1)
 
 print(df['input'].shape)
 

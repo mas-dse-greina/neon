@@ -38,7 +38,6 @@ parser.add_argument('--subset', type=int, default=9)
 args = parser.parse_args()
 
 subset = args.subset
-#testFileName = '/mnt/data/medical/luna16/luna16_roi_subset{}_augmented.h5'.format(subset)
 testFileName = '/mnt/data/medical/luna16/luna16_roi_subset{}_ALL.h5'.format(subset)
 
 print('Using test file: {}'.format(testFileName))
@@ -62,13 +61,6 @@ test_set = HDF5Iterator(testFileName)
 
 model_filename= 'LUNA16_resnetHDF_subset{}.prm'.format(subset)
 #model_filename= 'LUNA16_resnetHDF_subset0.prm'
-
-# if (subset <= 5):
-# 	model_filename = 'LUNA16_resnetHDF_subset0.prm'
-# else:
-# 	model_filename = 'LUNA16_resnetHDF_subset9.prm'
-
-#model_filename = 'LUNA16_resnet_subset9_GOODENOUGH.prm'
 
 print('Using model: {}'.format(model_filename))
 
