@@ -58,8 +58,10 @@ USE_AUGMENTATION = args.augment
 
 cand_path = 'CSVFILES/candidates_V2.csv'
 
-window_width = 40 # This is really the half width so window will be double this width
-window_height = 40 # This is really the half height so window will be double this height
+# Large 40, Medium 30, Small 20
+
+window_width = 30 # This is really the half width so window will be double this width
+window_height = 30 # This is really the half height so window will be double this height
 window_depth = 5 # This is really the half depth so window will be double this depth
 num_channels = 1
 

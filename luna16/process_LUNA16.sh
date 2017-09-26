@@ -11,8 +11,8 @@ python LUNA16_extract_patches_subset_HDF5.py --subset 1 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 0 &
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 1 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 0 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 1 &
 
 wait # Wait for the process above to stop
 
@@ -38,9 +38,9 @@ python LUNA16_extract_patches_subset_HDF5.py --subset 4 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 2 &
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 3 &
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 4 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 2 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 3 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 4 &
 
 wait # Wait for the process above to stop
 
@@ -67,9 +67,9 @@ python LUNA16_extract_patches_subset_HDF5.py --subset 7 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 5 &
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 6 &
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 7 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 5 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 6 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 7 &
 
 wait # Wait for the process above to stop
 
@@ -92,8 +92,8 @@ python LUNA16_extract_patches_subset_HDF5.py --subset 9 &
 
 wait # Wait for the process above to stop
 
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 8 &
-python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 40 --subset 9 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 8 &
+python LUNA16_resnet_HDF5.py -z 256 -b gpu -i 0 --depth 50 -e 60 --subset 9 &
 
 wait # Wait for the process above to stop
 

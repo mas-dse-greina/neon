@@ -98,16 +98,6 @@ Taken from https://github.com/NervanaSystems/neon/blob/master/examples/imagenet/
 #           \                            /
 #            -   sidepath = Identity   - 
 #
-# For networks > 50 layers, we'll use the updated bottleneck
-# which just moves the Relu into the mainpath so that
-# the sidepath is a clean Indentity function.
-# https://arxiv.org/pdf/1603.05027.pdf
-#
-#             - mainpath = Convolution - Relu - 
-#           /                                   \
-# input   -                                       Sum - output
-#           \                                   /
-#            -       sidepath = Identity       - 
 
 def conv_params(fsize, nfm, strides=1, relu=True, batch_norm=True):
     return dict(fshape=(fsize, fsize, nfm),
