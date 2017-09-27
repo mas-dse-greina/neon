@@ -37,8 +37,10 @@ parser.add_argument('--augment', action='store_true',
 parser.add_argument('--exclude', action='store_true',
                     help='Exclude this subset.')
 
-args = parser.parse_args()
+parser.add_argument('--patch_size', default=40, help='Number of pixels in width/height (square patch).')
+parser.add_argument('--patch_depth', default=5, help='Number of pixels in depth.')
 
+args = parser.parse_args()
 
 # To get the original LUNA16 MHD data:
 # wget https://www.dropbox.com/sh/mtip9dx6zt9nb3z/AAAs2wbJxbNM44-uafZyoMVca/subset5.zip
@@ -58,11 +60,11 @@ USE_AUGMENTATION = args.augment
 
 cand_path = 'CSVFILES/candidates_V2.csv'
 
-# Large 40, Medium 30, Small 20
+# XLarge 50, Large 40, Medium 30, Smedium 25, Small 20
 
-window_width = 30 # This is really the half width so window will be double this width
-window_height = 30 # This is really the half height so window will be double this height
-window_depth = 5 # This is really the half depth so window will be double this depth
+window_width = args.patch_size # This is really the half width so window will be double this width
+window_height = args.patch_size # This is really the half height so window will be double this height
+window_depth = args.patch_depth # This is really the half depth so window will be double this depth
 num_channels = 1
 
 pixel_spacing = [.75, .75, .75]  # mm per pixel/voxel
