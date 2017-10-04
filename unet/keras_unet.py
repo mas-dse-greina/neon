@@ -3,13 +3,14 @@ import os
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Supress Tensforflow debug messages
 
 import tensorflow as tf
 from keras import backend as K
 
 with tf.device('/gpu:2'):
     config = tf.ConfigProto()
-    config.gpu_options.allow_growth=True
+    config.gpu_options.allow_growth=False
     config.log_device_placement=False
     sess = tf.Session(config=config)
     K.set_session(sess)
@@ -30,7 +31,7 @@ K.set_image_data_format('channels_last')  # TF dimension ordering in this code
 img_rows = 32
 img_cols = 32
 color_channels = 3
-num_classes = 2  # 2 output classes in the segmentation map
+num_classes = 1  # 2 output classes in the segmentation map
 
 smooth = 1.
 
@@ -91,11 +92,11 @@ def create_unet(input_size=(img_rows, img_cols, color_channels), num_classes=2):
     conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
     conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
 
-    conv10 = Conv2D(1, (1, 1), activation='sigmoid')(conv9)
+    conv10 = Conv2D(3, (1, 1), activation='sigmoid')(conv9)
 
     model = Model(inputs=[inputs], outputs=[conv10])
 
-    model.compile(optimizer=Adam(lr=1e-5), loss=dice_coef_loss, metrics=[dice_coef])
+    model.compile(optimizer=Adam(lr=1e-5), loss='binary_crossentropy', metrics=[dice_coef])
 
     return model
 
@@ -152,6 +153,6 @@ validation_generator = zip(image_generator_val, mask_generator_val)
 model.fit_generator(
     train_generator,
     steps_per_epoch=200,
-    epochs=50, 
-    validation_data=validation_generator)
+    epochs=50, verbose=1,
+    validation_data=validation_generator, validation_steps=10)
 
