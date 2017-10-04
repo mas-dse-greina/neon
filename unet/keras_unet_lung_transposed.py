@@ -22,7 +22,7 @@ import cv2
 from sklearn.model_selection import train_test_split
 
 from keras.models import Model
-from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate
+from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, UpSampling2D
 from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import ModelCheckpoint
@@ -37,7 +37,7 @@ K.set_session(sess)
 
 IMAGE_LIB = 'finding-lungs-in-ct-data/2d_images/'
 MASK_LIB = 'finding-lungs-in-ct-data/2d_masks/'
-IMG_HEIGHT, IMG_WIDTH = 512, 512
+IMG_HEIGHT, IMG_WIDTH = 128, 128
 SEED=16
 
 def img_generator(x_train, y_train, batch_size):
@@ -104,22 +104,22 @@ def unet_tranposed(input_layer):
     # Each level doubles the number of feature maps but halves the map size
     conv1 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same')(input_layer)
     conv1 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same')(conv1)
-    pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+    pool1 = MaxPooling2D(pool_size=(2, 2), name='contract1')(conv1)
 
     conv2 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(pool1)
     conv2 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(conv2)
-    pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+    pool2 = MaxPooling2D(pool_size=(2, 2), name='contract2')(conv2)
 
     conv3 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(pool2)
     conv3 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(conv3)
-    pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+    pool3 = MaxPooling2D(pool_size=(2, 2), name='contract3')(conv3)
 
     conv4 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same')(pool3)
     conv4 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same')(conv4)
-    pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
+    pool4 = MaxPooling2D(pool_size=(2, 2), name='contract4')(conv4)
 
     conv5 = Conv2D(filters=1024, kernel_size=(3, 3), activation='relu', padding='same')(pool4)
-    conv5 = Conv2D(filters=1024, kernel_size=(3, 3), activation='relu', padding='same')(conv5)
+    conv5 = Conv2D(filters=1024, kernel_size=(3, 3), activation='relu', padding='same', name='contract5')(conv5)
 
     # "Expansive path" (up the right side of the U)
     # Here we just need to do a transposed convolution to up-sample the feature maps
@@ -128,21 +128,21 @@ def unet_tranposed(input_layer):
     # classifier has features from multiple receptive field scales.
     up6 = concatenate([Conv2DTranspose(filters=512, kernel_size=(2, 2), strides=(2, 2), padding='same')(conv5), conv4], axis=3)
     conv6 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same')(up6)
-    conv6 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same')(conv6)
+    conv6 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same', name='expand6')(conv6)
 
     up7 = concatenate([Conv2DTranspose(filters=256, kernel_size=(2, 2), strides=(2, 2), padding='same')(conv6), conv3], axis=3)
     conv7 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(up7)
-    conv7 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(conv7)
+    conv7 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same', name='expand7')(conv7)
 
     up8 = concatenate([Conv2DTranspose(filters=128, kernel_size=(2, 2), strides=(2, 2), padding='same')(conv7), conv2], axis=3)
     conv8 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(up8)
-    conv8 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(conv8)
+    conv8 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same', name='expand8')(conv8)
 
     up9 = concatenate([Conv2DTranspose(filters=64, kernel_size=(2, 2), strides=(2, 2), padding='same')(conv8), conv1], axis=3)
     conv9 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same')(up9)
-    conv9 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same')(conv9)
+    conv9 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same', name='expand9')(conv9)
 
-    output_layer = Conv2D(filters=1, kernel_size=(1,1), activation='sigmoid')(conv9)
+    output_layer = Conv2D(filters=1, kernel_size=(1,1), activation='sigmoid', name='Output')(conv9)
                
     return output_layer
 
@@ -159,22 +159,22 @@ def unet_upsampling(input_layer):
     # Each level doubles the number of feature maps but halves the map size
     conv1 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same')(input_layer)
     conv1 = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same')(conv1)
-    pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+    pool1 = MaxPooling2D(pool_size=(2, 2), name='contract1')(conv1)
 
     conv2 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(pool1)
     conv2 = Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(conv2)
-    pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+    pool2 = MaxPooling2D(pool_size=(2, 2), name='contract2')(conv2)
 
     conv3 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(pool2)
     conv3 = Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(conv3)
-    pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+    pool3 = MaxPooling2D(pool_size=(2, 2), name='contract3')(conv3)
 
     conv4 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same')(pool3)
     conv4 = Conv2D(filters=512, kernel_size=(3, 3), activation='relu', padding='same')(conv4)
-    pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
+    pool4 = MaxPooling2D(pool_size=(2, 2), name='contract4')(conv4)
 
     conv5 = Conv2D(filters=1024, kernel_size=(3, 3), activation='relu', padding='same')(pool4)
-    conv5 = Conv2D(filters=1024, kernel_size=(3, 3), activation='relu', padding='same')(conv5)
+    conv5 = Conv2D(filters=1024, kernel_size=(3, 3), activation='relu', padding='same', name='contract5')(conv5)
 
     # "Expansive path" (up the right side of the U)
     # Here we just need to do a UpPooling to up-sample the feature maps
@@ -184,26 +184,26 @@ def unet_upsampling(input_layer):
 
     up6 = concatenate([UpSampling2D(size=(2,2))(conv5), conv4], axis=-1)
     conv6 = Conv2D(filters=512, kernel_size=(3,3), activation='relu', padding='same')(up6)
-    conv6 = Conv2D(filters=512, kernel_size=(3,3), activation='relu', padding='same')(conv6)
+    conv6 = Conv2D(filters=512, kernel_size=(3,3), activation='relu', padding='same', name='expand6')(conv6)
 
     up7 = concatenate([UpSampling2D(size=(2,2))(conv6), conv3], axis=-1)
     conv7 = Conv2D(filters=256, kernel_size=(3,3), activation='relu', padding='same')(up7)
-    conv7 = Conv2D(filters=256, kernel_size=(3,3), activation='relu', padding='same')(conv7)
+    conv7 = Conv2D(filters=256, kernel_size=(3,3), activation='relu', padding='same', name='expand7')(conv7)
 
     up8 = concatenate([UpSampling2D(size=(2,2))(conv7), conv2], axis=-1)
     conv8 = Conv2D(filters=128, kernel_size=(3,3), activation='relu', padding='same')(up8)
-    conv8 = Conv2D(filters=128, kernel_size=(3,3), activation='relu', padding='same')(conv8)
+    conv8 = Conv2D(filters=128, kernel_size=(3,3), activation='relu', padding='same', name='expand8')(conv8)
 
     up9 = concatenate([UpSampling2D(size=(2,2))(conv8), conv1], axis=-1)
     conv9 = Conv2D(filters=64, kernel_size=(3,3), activation='relu', padding='same')(up9)
-    conv9 = Conv2D(filters=64, kernel_size=(3,3), activation='relu', padding='same')(conv9)
+    conv9 = Conv2D(filters=64, kernel_size=(3,3), activation='relu', padding='same', name='expand9')(conv9)
 
-    output_layer = Conv2D(filters=1, kernel_size=(1,1), activation='sigmoid')(conv9)
+    output_layer = Conv2D(filters=1, kernel_size=(1,1), activation='sigmoid', name='Output')(conv9)
 
     return output_layer
 
 
-output_layer = unet_tranposed(input_layer)
+output_layer = unet_upsampling(input_layer)
 
 model = Model(input_layer, output_layer)
 
