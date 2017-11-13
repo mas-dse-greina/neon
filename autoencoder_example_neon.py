@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015-2017 Nervana Systems Inc.
+# Copyright 2015-2017 Intel Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -37,6 +37,7 @@ from neon.util.argparser import NeonArgparser
 
 width = 28   # Image width
 height = 28  # Image height
+amount_of_noise = 1.0  # Positive number (usually between 0-1)
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -48,11 +49,11 @@ dataset = MNIST(path=args.data_dir)
 
 y_train = X_train # In an autoencoder the output predicts the input
 # Add some random noise to the input images
-X_train += np.random.uniform(low=0.0, high=1.0, size=np.shape(X_train))
+X_train += np.random.uniform(low=0.0, high=amount_of_noise, size=np.shape(X_train))
 
 y_test = X_test # In an autoencoder the output predicts the input
 # Add some random noise to the input images
-X_test += np.random.uniform(low=0.0, high=1.0, size=np.shape(X_test))
+X_test += np.random.uniform(low=0.0, high=amount_of_noise, size=np.shape(X_test))
 
 # Create iterators for the training and testing sets
 train_set = ArrayIterator(X=X_train, y=y_train, lshape=(1, height, width), make_onehot=False)
