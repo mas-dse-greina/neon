@@ -33,7 +33,7 @@ from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.backends import gen_backend
 
 from neon.optimizers import Adam, Schedule, MultiOptimizer, RMSProp
-from neon.transforms import Cost, Softmax
+from neon.transforms import Softmax
 from neon.transforms import Rectlin, CrossEntropyBinary
 from neon.models import Model
 
@@ -92,11 +92,11 @@ Taken from https://github.com/NervanaSystems/neon/blob/master/examples/imagenet/
 
 # A resnet module
 #
-#             - mainpath = Convolution - 
+#             - mainpath = Convolution -
 #           /                            \
 # input   -                                Sum - Relu - output
 #           \                            /
-#            -   sidepath = Identity   - 
+#            -   sidepath = Identity   -
 #
 
 def conv_params(fsize, nfm, strides=1, relu=True, batch_norm=True):
@@ -157,11 +157,11 @@ def create_network(stage_depth):
         layers.append(module_factory(nfm, bottleneck, stride))
 
     layers.append(Pooling('all', op='avg', name='end_resnet'))
-    layers.append(Conv(name = 'Custom Head 1', **conv_params(1, 1000, relu=True))) 
+    layers.append(Conv(name = 'Custom Head 1', **conv_params(1, 1000, relu=True)))
     layers.append(Dropout(0.5))
-    layers.append(Conv(name = 'Custom Head 2', **conv_params(1, 2, relu=False))) 
+    layers.append(Conv(name = 'Custom Head 2', **conv_params(1, 2, relu=False)))
     layers.append(Activation(Softmax()))
-    # layers.append(Affine(512, init=Kaiming(local=False), 
+    # layers.append(Affine(512, init=Kaiming(local=False),
     #                  batch_norm=True, activation=Rectlin()))
     # layers.append(Affine(2, init=Kaiming(local=False), activation=Softmax()))
 
@@ -170,7 +170,7 @@ def create_network(stage_depth):
 lunaModel = create_network(args.depth)
 
 PRETRAINED = False
-# Pre-trained ResNet 50 
+# Pre-trained ResNet 50
 # It assumes the image has a depth channel of 3
 pretrained_weights_file = 'resnet{}_weights.prm'.format(args.depth)
 print ('Loading pre-trained ResNet weights: {}'.format(pretrained_weights_file))
@@ -223,7 +223,7 @@ opt = MultiOptimizer(mapping)
 # configure callbacks
 if args.callback_args['eval_freq'] is None:
     args.callback_args['eval_freq'] = 1
-    
+
 # configure callbacks
 callbacks = Callbacks(lunaModel, eval_set=valid_set, **args.callback_args)
 # add a callback that saves the best model state
@@ -231,5 +231,3 @@ callbacks.add_save_best_state_callback(modelFileName)
 
 
 lunaModel.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
-
-
