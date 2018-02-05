@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Loads the LUNA16 dataset (subset) and extracts 
+Loads the LUNA16 dataset (subset) and extracts
 a 3D image tensor for the region of interest.
 """
 
@@ -62,9 +62,9 @@ cand_path = 'CSVFILES/candidates_V2.csv'
 
 # XLarge 50, Large 40, Medium 30, Smedium 25, Small 20
 
-window_width = args.patch_size # This is really the half width so window will be double this width
-window_height = args.patch_size # This is really the half height so window will be double this height
-window_depth = args.patch_depth # This is really the half depth so window will be double this depth
+window_width = int(args.patch_size) # This is really the half width so window will be double this width
+window_height = int(args.patch_size) # This is really the half height so window will be double this height
+window_depth = int(args.patch_depth) # This is really the half depth so window will be double this depth
 num_channels = 1
 
 pixel_spacing = [.75, .75, .75]  # mm per pixel/voxel
@@ -74,21 +74,21 @@ if not USE_AUGMENTATION:
     border_size = 0
 
 print('Patch size will be {} mm x {} mm.'.format(
-     (window_height-border_size)*2*pixel_spacing[1], 
+     (window_height-border_size)*2*pixel_spacing[1],
      (window_width-border_size)*2*pixel_spacing[0]))
 
-def find_bbox(center,  
+def find_bbox(center,
               mask_width, mask_height, mask_depth,
               depth, height, width, spacing):
     '''
     Center : center region of interest -- list of coordinates x,y,z
     origin = x,y,z mm np.array
     '''
-    
-    # TODO:  The height and width seemed to be switched. 
+
+    # TODO:  The height and width seemed to be switched.
     # This works but needs to be simplified. It's probably due to SimpleITK versus Numpy transposed indicies.
 
-    # NOTE: The np.abs are needed because some of the CT scans have the axes flipped. 
+    # NOTE: The np.abs are needed because some of the CT scans have the axes flipped.
     # The proper method would be to use simple ITK's GetDirection to determine the
     # flip and do a matrix transformation. However, the LUNA16 authors promote just
     # taking the absolute value since it is only a few files that are affected
@@ -113,7 +113,7 @@ def find_bbox(center,
 
     down = y - mask_height
     if down <= 0:
-        pad_down = -down 
+        pad_down = -down
         down = 0
     else:
         pad_down = 0
@@ -124,17 +124,17 @@ def find_bbox(center,
         up = height
     else:
         pad_up = 0
-    
+
     bottom = z - mask_depth
     if bottom <= 0:
-        pad_bottom = -bottom 
+        pad_bottom = -bottom
         bottom = 0
     else:
         pad_bottom = 0
 
     top = z + mask_depth
     if top > depth:
-        pad_top = top - depth 
+        pad_top = top - depth
         top = depth
     else:
         pad_top = 0
@@ -142,14 +142,14 @@ def find_bbox(center,
 
     bbox = [[down, up], [left, right], [bottom, top]]
     padding = [[pad_down, pad_up], [pad_left, pad_right], [pad_bottom, pad_top]]
-    
+
     return bbox, padding
 
 def normalize_img(img):
-    
+
     '''
     Sets the MHD image to be approximately 0.5 x 0.5 x 0.5 mm voxel size
-    
+
     https://itk.org/ITKExamples/src/Filtering/ImageGrid/ResampleAnImage/Documentation.html
     '''
     new_x_size = img.GetSpacing()[0]*img.GetWidth()  # Number of pixels you want for x dimension
@@ -165,8 +165,8 @@ def normalize_img(img):
     interpolator_type = sitk.sitkLinear
     #interpolator_type = sitk.sitkBSpline
 
-    img_norm = sitk.Resample(img, new_size, sitk.Transform(), interpolator_type, img.GetOrigin(), new_spacing, img.GetDirection(), 0.0, img.GetPixelIDValue())
-   
+    img_norm = sitk.Resample(img, np.array(new_size, dtype='uint32').tolist(), sitk.Transform(), interpolator_type, img.GetOrigin(), new_spacing, img.GetDirection(), 0.0, img.GetPixelIDValue())
+
     # For some reason I need to correc the origin to the new scaling factor
     img_norm.SetOrigin(np.array(img.GetOrigin()) / np.array(new_spacing))
 
@@ -179,13 +179,13 @@ All other HU will be masked.
 Then we normalize pixel values between 0 and 1.
 """
 def normalizePlanes(npzarray):
-     
+
     if USE_AUGMENTATION:
         maxHU = np.random.randint(1000, 2000) # This helps give data augmentation by changing the contrast randomly
     else:
         maxHU = 2000.
     minHU = -1000.
- 
+
     npzarray = (npzarray - minHU) / (maxHU - minHU)
     npzarray[npzarray>1] = 1.
     npzarray[npzarray<0] = 0.
@@ -200,17 +200,17 @@ def img_crop(img, border_size=5):
             return img
 
         shape = img.shape
-            
+
         # Crop larger than smallest image dimension
         assert (border_size < np.min(shape[1:])//2), 'Border size ({}) larger than image'.format(border_size)
-        
+
         # Choose random place to crop border in each dimension
         crop = np.random.randint(-border_size, border_size, size=len(shape)-1)
 
         for dim in range(len(crop)):
             # Take just the cropped indices from this axis
             img = img[:].take(range(border_size + crop[dim], shape[dim+1] - border_size + crop[dim]), dim+1)
-        
+
         return img
 
 
@@ -218,7 +218,7 @@ def extract_candidates(img_file):
 
     # Get the name of the file
     subjectName = ntpath.splitext(ntpath.basename(img_file))[0]  # Strip off the .mhd extension
-    
+
     # Read the list of candidate ROI
     dfCandidates = pd.read_csv(DATA_DIR+cand_path)
 
@@ -265,27 +265,27 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
     I've found it very difficult to keep the order correct when going back and forth,
     but this code seems to pass the sanity checks.
     '''
-    
-    slice_z, height, width = img_array.shape        
-    
+
+    slice_z, height, width = img_array.shape
+
     # This is the real world x,y,z coordinates of possible nodule (in mm)
     candidate_x = worldCoords[0]
     candidate_y = worldCoords[1]
     candidate_z = worldCoords[2]
-    
+
     center = np.array([candidate_x, candidate_y, candidate_z])   # candidate center in mm
     voxel_center = np.rint(np.abs(center / spacing - origin)).astype(int)  # candidate center in voxels
 
     # Calculates the bounding box for desired position
     bbox, pad_needed = find_bbox(voxel_center, window_width, window_height, window_depth,
                               slice_z, height, width, spacing)
-        
+
     if (np.sum(pad_needed) == 0):
 
         # ROI volume tensor
         # D x H x W
-        img = img_array[bbox[2][0]:bbox[2][1], 
-                        bbox[0][0]:bbox[0][1], 
+        img = img_array[bbox[2][0]:bbox[2][1],
+                        bbox[0][0]:bbox[0][1],
                         bbox[1][0]:bbox[1][1]]
 
         # '''
@@ -306,7 +306,7 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
         # img.append(img3)
 
         # img = np.array(img)
-        
+
         # '''
         # CODE FOR CADIMI END - 3 orthogonal slices in channel depth
         # '''
@@ -320,8 +320,8 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
         img1 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
 
         # Put the image in the center of the padded frame
-        img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
-            pad_needed[0][0]:(window_width*2 - pad_needed[0][1]), 
+        img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]),
+            pad_needed[0][0]:(window_width*2 - pad_needed[0][1]),
             pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img1
 
         # '''
@@ -342,8 +342,8 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
 
         # img = np.zeros((window_height*2, window_width*2))
         # img2 = img_array[bbox[2][0]:bbox[2][1], voxel_center[1], bbox[1][0]:bbox[1][1]]
-       
-        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
+
+        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]),
         #     pad_needed[1][0]:(window_height*2 - pad_needed[1][1])] = img2
 
         # img = img.reshape(1, window_height*2, window_width*2)
@@ -352,7 +352,7 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
         # img = np.zeros((window_height*2, window_width*2))
         # img3 = img_array[bbox[2][0]:bbox[2][1], bbox[0][0]:bbox[0][1], voxel_center[0]]
 
-        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]), 
+        # img[pad_needed[2][0]:(window_depth*2 - pad_needed[2][1]),
         #     pad_needed[0][0]:(window_width*2 - pad_needed[0][1])] = img3
         # img = img.reshape(1, window_height*2, window_width*2)
 
@@ -363,13 +363,13 @@ def extract_tensor(img_array, worldCoords, origin, spacing, border_size):
         # '''
         # CODE FOR CADIMI END - 3 orthogonal slices in channel depth
         # '''
-  
+
     img = img_crop(img, border_size)
     img = normalizePlanes(img)
 
     imgTensor = img.ravel().reshape(1,-1)
 
-    return imgTensor   
+    return imgTensor
 
 
 """
@@ -425,7 +425,7 @@ def downsample_negatives(candidateValues):
     candidate_array = np.append(candidate_array, idx_pos)
 
     # Sort array
-    candidate_array = np.sort(candidate_array)  
+    candidate_array = np.sort(candidate_array)
 
     return candidate_array
 
@@ -458,7 +458,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
         print('Extracting ROI from files in this directory: {}'.format(root))
 
         for file in tqdm(files):
-            
+
             img_file = os.path.join(root, file)
             #print(img_file)
 
@@ -483,7 +483,7 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
             for candidate_idx in candidate_array: # Iterate through all candidates
 
-                imgTensor = extract_tensor(img_array, worldCoords[candidate_idx, :], 
+                imgTensor = extract_tensor(img_array, worldCoords[candidate_idx, :],
                                            np.array(itk_img.GetOrigin()), np.array(itk_img.GetSpacing()), border_size)
 
                 if (imgTensor is not None):
@@ -511,16 +511,16 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
     # Output attribute 'lshape' to let neon know the shape of the tensor.
     #df['input'].attrs['lshape'] = (num_channels, window_height*2, window_width*2, window_depth*2) # (Channel, Height, Width, Depth)
-    
+
     # There's only one channel so let's see if we can shove the 3rd dimension into the channels
     # It won't be 3D convolution, but perhaps we'll get something out of it.
     #df['input'].attrs['lshape'] = (1, window_height*2, window_width*2, window_depth*2) # (Height, Width, Depth)
-    
+
     #df['input'].attrs['lshape'] = (num_channels, (window_height -border_size)*2, (window_width-border_size)*2) # (Height, Width, Depth)
 
     df['input'].attrs['lshape'] = (window_depth*2, (window_height - border_size)*2, (window_width - border_size)*2) # (Height, Width, Depth)
 
-    
+
     # Output the labels
     valuesArray = np.array(valuesArray)
     df.create_dataset('output', data=valuesArray.reshape(-1,1))
@@ -528,10 +528,9 @@ with h5py.File(outFilename, 'w') as df:  # Open hdf5 file for writing our DICOM 
 
     # Keep the positions in the HDF5 file
     df.create_dataset('position', data=np.array(posArray))
-    
+
     num0 = len(np.where(valuesArray == 0)[0])
     num1 = len(np.where(valuesArray == 1)[0])
 
     print('# class 0 = {}, # class 1 = {}, total = {}, ratio = {:.2f}'.format(num0, num1, len(valuesArray), float(num0)/num1))
-    print('# Positives that were too close to the border to take ROI = {}'.format(positives_on_border))        
-                
+    print('# Positives that were too close to the border to take ROI = {}'.format(positives_on_border))

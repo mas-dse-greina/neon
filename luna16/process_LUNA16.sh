@@ -4,7 +4,7 @@
 
 ARG1=${1:-50}  # Size of the patch (in pixels)
 ARG2=${2:-5}   # Depth of the patch (in pixels)
-ARG3 = ${3:-40}  # Number of epochs to train
+ARG3=${3:-40}  # Number of epochs to train
 
 echo 'Using patch parameters: size ' ${ARG1} 'pixels, depth = ' ${ARG2} 'pixels' 
 echo 'Training for ' ${ARG3} 'epochs'
